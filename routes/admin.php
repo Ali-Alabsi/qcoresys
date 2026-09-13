@@ -1,0 +1,72 @@
+<?php
+
+use App\Http\Controllers\Web\Admin\AuthController;
+use App\Http\Controllers\Web\Admin\PdfController;
+use App\Http\Controllers\Web\Admin\PlatformController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
+    Route::middleware('guest')->group(function () {
+        Route::get('login', [AuthController::class, 'showLogin'])->name('login');
+        Route::post('login', [AuthController::class, 'login'])->name('login.store');
+    });
+
+    Route::middleware('auth')->group(function () {
+        Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+        Route::get('/', [PlatformController::class, 'dashboard'])->middleware('permission:customers.view')->name('dashboard');
+
+        Route::get('customers', [PlatformController::class, 'customersIndex'])->middleware('permission:customers.view')->name('customers.index');
+        Route::get('customers/create', [PlatformController::class, 'customersCreate'])->middleware('permission:customers.create')->name('customers.create');
+        Route::post('customers', [PlatformController::class, 'customersStore'])->middleware('permission:customers.create')->name('customers.store');
+        Route::get('customers/{customer}', [PlatformController::class, 'customersShow'])->middleware('permission:customers.view')->name('customers.show');
+        Route::get('customers/{customer}/edit', [PlatformController::class, 'customersEdit'])->middleware('permission:customers.update')->name('customers.edit');
+        Route::put('customers/{customer}', [PlatformController::class, 'customersUpdate'])->middleware('permission:customers.update')->name('customers.update');
+
+        Route::get('customer-requests', [PlatformController::class, 'requestsIndex'])->middleware('permission:customer_requests.view')->name('customer-requests.index');
+        Route::get('customer-requests/create', [PlatformController::class, 'requestsCreate'])->middleware('permission:customer_requests.create')->name('customer-requests.create');
+        Route::post('customer-requests', [PlatformController::class, 'requestsStore'])->middleware('permission:customer_requests.create')->name('customer-requests.store');
+        Route::get('customer-requests/{customerRequest}', [PlatformController::class, 'requestsShow'])->middleware('permission:customer_requests.view')->name('customer-requests.show');
+        Route::get('customer-requests/{customerRequest}/edit', [PlatformController::class, 'requestsEdit'])->middleware('permission:customer_requests.update')->name('customer-requests.edit');
+        Route::put('customer-requests/{customerRequest}', [PlatformController::class, 'requestsUpdate'])->middleware('permission:customer_requests.update')->name('customer-requests.update');
+
+        Route::get('quotations', [PlatformController::class, 'quotationsIndex'])->middleware('permission:quotations.view')->name('quotations.index');
+        Route::get('quotations/create', [PlatformController::class, 'quotationsCreate'])->middleware('permission:quotations.create')->name('quotations.create');
+        Route::post('quotations', [PlatformController::class, 'quotationsStore'])->middleware('permission:quotations.create')->name('quotations.store');
+        Route::get('quotations/{quotation}', [PlatformController::class, 'quotationsShow'])->middleware('permission:quotations.view')->name('quotations.show');
+        Route::get('quotations/{quotation}/edit', [PlatformController::class, 'quotationsEdit'])->middleware('permission:quotations.update')->name('quotations.edit');
+        Route::put('quotations/{quotation}', [PlatformController::class, 'quotationsUpdate'])->middleware('permission:quotations.update')->name('quotations.update');
+        Route::post('quotations/{quotation}/approve', [PlatformController::class, 'quotationApprove'])->middleware('permission:quotations.approve')->name('quotations.approve');
+        Route::post('quotations/{quotation}/send', [PlatformController::class, 'quotationSend'])->middleware('permission:quotations.send')->name('quotations.send');
+        Route::get('quotations/{quotation}/pdf', [PdfController::class, 'quotation'])->middleware('permission:quotations.view')->name('quotations.pdf');
+
+        Route::get('accounts', [PlatformController::class, 'accountsIndex'])->middleware('permission:accounts.view')->name('accounts.index');
+
+        Route::get('exchange-rates', [PlatformController::class, 'exchangeRatesIndex'])->middleware('permission:exchange_rates.view')->name('exchange-rates.index');
+        Route::get('exchange-rates/create', [PlatformController::class, 'exchangeRatesCreate'])->middleware('permission:exchange_rates.create')->name('exchange-rates.create');
+        Route::get('exchange-rates/lookup', [PlatformController::class, 'exchangeRatesLookup'])->middleware('permission:journals.create')->name('exchange-rates.lookup');
+        Route::post('exchange-rates/annual-closing', [PlatformController::class, 'exchangeRatesAnnualClosing'])->middleware('permission:journals.create')->name('exchange-rates.annual-closing');
+        Route::post('exchange-rates', [PlatformController::class, 'exchangeRatesStore'])->middleware('permission:exchange_rates.create')->name('exchange-rates.store');
+        Route::get('exchange-rates/{exchangeRate}/edit', [PlatformController::class, 'exchangeRatesEdit'])->middleware('permission:exchange_rates.update')->name('exchange-rates.edit');
+        Route::put('exchange-rates/{exchangeRate}', [PlatformController::class, 'exchangeRatesUpdate'])->middleware('permission:exchange_rates.update')->name('exchange-rates.update');
+
+        Route::get('journals', [PlatformController::class, 'journalsIndex'])->middleware('permission:journals.view')->name('journals.index');
+        Route::get('journals/create', [PlatformController::class, 'journalsCreate'])->middleware('permission:journals.create')->name('journals.create');
+        Route::post('journals', [PlatformController::class, 'journalsStore'])->middleware('permission:journals.create')->name('journals.store');
+        Route::get('journals/{journal}', [PlatformController::class, 'journalsShow'])->middleware('permission:journals.view')->name('journals.show');
+        Route::get('journals/{journal}/attachments/{attachment}', [PlatformController::class, 'journalAttachmentDownload'])->middleware('permission:journals.view')->name('journals.attachments.download');
+        Route::post('journals/{journal}/post', [PlatformController::class, 'journalPost'])->middleware('permission:journals.post')->name('journals.post');
+
+        Route::get('services', [PlatformController::class, 'servicesIndex'])->middleware('permission:services_catalog.view')->name('services.index');
+        Route::get('services/{service}/edit', [PlatformController::class, 'servicesEdit'])->middleware('permission:services_catalog.update')->name('services.edit');
+        Route::put('services/{service}', [PlatformController::class, 'servicesUpdate'])->middleware('permission:services_catalog.update')->name('services.update');
+
+        Route::get('portfolio-projects', [PlatformController::class, 'portfolioIndex'])->middleware('permission:portfolio.view')->name('portfolio-projects.index');
+        Route::get('portfolio-projects/create', [PlatformController::class, 'portfolioCreate'])->middleware('permission:portfolio.create')->name('portfolio-projects.create');
+        Route::post('portfolio-projects', [PlatformController::class, 'portfolioStore'])->middleware('permission:portfolio.create')->name('portfolio-projects.store');
+        Route::get('portfolio-projects/{portfolioProject}/edit', [PlatformController::class, 'portfolioEdit'])->middleware('permission:portfolio.update')->name('portfolio-projects.edit');
+        Route::put('portfolio-projects/{portfolioProject}', [PlatformController::class, 'portfolioUpdate'])->middleware('permission:portfolio.update')->name('portfolio-projects.update');
+
+        Route::get('settings', [PlatformController::class, 'settingsEdit'])->middleware('permission:settings.view')->name('settings.edit');
+        Route::put('settings', [PlatformController::class, 'settingsUpdate'])->middleware('permission:settings.update')->name('settings.update');
+    });
+});
