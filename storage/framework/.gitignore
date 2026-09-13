@@ -7,3 +7,5 @@ routes.php
 routes.scanned.php
 schedule-*
 services.json
+app-setup.lock
+setup_completed.lock
