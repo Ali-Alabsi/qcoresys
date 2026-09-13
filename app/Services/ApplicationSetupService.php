@@ -44,6 +44,7 @@ class ApplicationSetupService
         $this->install();
     }
 
+    
     /**
      * Run a one-time database reset (migrate:fresh --seed), or a non-destructive
      * migrate + seed when invoked explicitly from the installer command.
