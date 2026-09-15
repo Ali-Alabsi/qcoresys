@@ -7,6 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 trait HasRoles
 {
+    /**
+     * In-request cache of role codes and permission codes.
+     *
+     * @var array{roles: list<string>, permissions: list<string>}|null
+     */
+    private ?array $authorizationCache = null;
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'user_roles')
@@ -15,18 +22,18 @@ trait HasRoles
 
     public function hasRole(string $code): bool
     {
-        return $this->roles()->where('code', $code)->exists();
+        return in_array($code, $this->authorizationSnapshot()['roles'], true);
     }
 
     public function hasPermission(string $code): bool
     {
-        if ($this->hasRole('SUPER_ADMIN')) {
+        $snapshot = $this->authorizationSnapshot();
+
+        if (in_array('SUPER_ADMIN', $snapshot['roles'], true)) {
             return true;
         }
 
-        return $this->roles()
-            ->whereHas('permissions', fn ($q) => $q->where('code', $code))
-            ->exists();
+        return in_array($code, $snapshot['permissions'], true);
     }
 
     public function assignRole(Role|string $role, ?int $assignedBy = null): void
@@ -45,5 +52,42 @@ trait HasRoles
                 'assigned_by' => $assignedBy,
             ],
         ]);
+
+        $this->forgetAuthorizationCache();
+    }
+
+    public function forgetAuthorizationCache(): void
+    {
+        $this->authorizationCache = null;
+        $this->unsetRelation('roles');
+    }
+
+    /**
+     * @return array{roles: list<string>, permissions: list<string>}
+     */
+    private function authorizationSnapshot(): array
+    {
+        if ($this->authorizationCache !== null) {
+            return $this->authorizationCache;
+        }
+
+        if (! $this->relationLoaded('roles')) {
+            $this->load('roles.permissions');
+        } else {
+            $this->loadMissing('roles.permissions');
+        }
+
+        $roles = $this->roles;
+
+        $this->authorizationCache = [
+            'roles' => $roles->pluck('code')->all(),
+            'permissions' => $roles
+                ->flatMap(fn (Role $role) => $role->permissions->pluck('code'))
+                ->unique()
+                ->values()
+                ->all(),
+        ];
+
+        return $this->authorizationCache;
     }
 }

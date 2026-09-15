@@ -5,10 +5,8 @@ namespace App\Services;
 use App\Models\Setting;
 use App\Models\User;
 use Dotenv\Dotenv;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -17,7 +15,7 @@ class ApplicationSetupService
     private static bool $booted = false;
 
     /**
-     * Prepare .env / APP_KEY, then wipe + migrate + seed once on the first HTTP request.
+     * Prepare .env / APP_KEY, then migrate + seed on the first HTTP request.
      */
     public function bootstrap(): void
     {
@@ -31,68 +29,59 @@ class ApplicationSetupService
             return;
         }
 
-        if ($this->setupAlreadyCompleted()) {
-            return;
-        }
-
         $this->ensureEnvironment();
 
         if (app()->runningInConsole()) {
             return;
         }
 
+        // Fast path: no DB, no lock, no migration scan when already ready.
+        if ($this->isSetupReady()) {
+            return;
+        }
+
         $this->install();
     }
 
-    
     /**
-     * Run a one-time database reset (migrate:fresh --seed), or a non-destructive
-     * migrate + seed when invoked explicitly from the installer command.
+     * Run migrations, seed prototype data, and ensure the admin exists.
      */
     public function install(bool $force = false): void
     {
         $this->ensureEnvironment();
-        $this->configureMysqlConnection();
-        $this->ensureDatabaseExists();
-        $this->reconnectMysql();
 
-        $handle = $this->acquireLock(storage_path('framework/app-setup.lock'));
+        if (! $force && $this->isSetupReady()) {
+            return;
+        }
+
+        $this->ensureDatabaseExists();
+
+        $lockPath = storage_path('framework/app-setup.lock');
+        $handle = $this->acquireLock($lockPath);
 
         try {
-            if ($force) {
-                Artisan::call('migrate', ['--force' => true]);
+            if (! $force && $this->isSetupReady()) {
+                return;
+            }
+
+            $wasInstalled = $this->isInstalled();
+
+            if (! $force && ! $this->needsInstall()) {
+                $this->markSetupReady();
+
+                return;
+            }
+
+            Artisan::call('migrate', ['--force' => true]);
+
+            // Seed only on first install (or forced CLI reinstall). Never re-seed
+            // when applying pending migrations to an already-installed app.
+            if ($force || ! $wasInstalled) {
                 Artisan::call('db:seed', ['--force' => true]);
-                $this->ensureStorageLink();
-                $this->markSetupCompleted();
-
-                return;
             }
-
-            if ($this->setupAlreadyCompleted()) {
-                return;
-            }
-
-            Artisan::call('migrate:fresh', [
-                '--force' => true,
-                '--seed' => true,
-            ]);
 
             $this->ensureStorageLink();
-            $this->markSetupCompleted();
-        } catch (QueryException $e) {
-            $this->logQueryException($e, 'Application one-time database setup failed.');
-            throw $e;
-        } catch (Throwable $e) {
-            Log::error('Application one-time database setup failed.', [
-                'message' => $e->getMessage(),
-                'exception' => $e::class,
-                'connection' => config('database.default'),
-                'host' => config('database.connections.mysql.host'),
-                'database' => config('database.connections.mysql.database'),
-                'username' => config('database.connections.mysql.username'),
-            ]);
-
-            throw $e;
+            $this->markSetupReady();
         } finally {
             $this->releaseLock($handle);
         }
@@ -110,10 +99,6 @@ class ApplicationSetupService
 
     public function isInstalled(): bool
     {
-        if ($this->setupAlreadyCompleted()) {
-            return true;
-        }
-
         try {
             if (! Schema::hasTable('users') || ! Schema::hasTable('settings')) {
                 return false;
@@ -121,173 +106,103 @@ class ApplicationSetupService
 
             return User::query()->where('email', $this->adminEmail())->exists()
                 && Setting::query()->exists();
-        } catch (QueryException $e) {
-            $this->logQueryException($e, 'Failed to determine whether the application is installed.');
-
-            return false;
         } catch (Throwable) {
             return false;
         }
     }
 
     /**
-     * Re-apply MySQL credentials from env / config / explicit defaults, then drop
-     * any stale PDO so shared hosts do not silently fall back to root@localhost.
+     * Whether the cheap filesystem marker matches current migration files.
      */
-    private function configureMysqlConnection(): void
+    public function isSetupReady(): bool
     {
-        $connection = (string) $this->settingValue(
-            'DB_CONNECTION',
-            'database.default',
-            'mysql'
-        );
+        $path = $this->setupReadyPath();
 
-        config(['database.default' => $connection]);
-
-        if (! in_array($connection, ['mysql', 'mariadb'], true)) {
-            return;
+        if (! is_file($path)) {
+            return false;
         }
 
-        config([
-            "database.connections.{$connection}.host" => $this->settingValue(
-                'DB_HOST',
-                "database.connections.{$connection}.host",
-                '127.0.0.1'
-            ),
-            "database.connections.{$connection}.port" => $this->settingValue(
-                'DB_PORT',
-                "database.connections.{$connection}.port",
-                '3306'
-            ),
-            "database.connections.{$connection}.database" => $this->settingValue(
-                'DB_DATABASE',
-                "database.connections.{$connection}.database",
-                'qcoressys'
-            ),
-            "database.connections.{$connection}.username" => $this->settingValue(
-                'DB_USERNAME',
-                "database.connections.{$connection}.username",
-                'root'
-            ),
-            "database.connections.{$connection}.password" => $this->passwordValue($connection),
-            "database.connections.{$connection}.charset" => $this->settingValue(
-                'DB_CHARSET',
-                "database.connections.{$connection}.charset",
-                'utf8mb4'
-            ),
-            "database.connections.{$connection}.collation" => $this->settingValue(
-                'DB_COLLATION',
-                "database.connections.{$connection}.collation",
-                'utf8mb4_unicode_ci'
-            ),
-        ]);
+        $stored = file_get_contents($path);
 
-        DB::purge('mysql');
-
-        if ($connection === 'mariadb') {
-            DB::purge('mariadb');
+        if ($stored === false) {
+            return false;
         }
+
+        $storedList = array_values(array_filter(array_map('trim', explode("\n", $stored)), fn ($line) => $line !== ''));
+
+        return $storedList === $this->migrationFileNames();
     }
 
-    private function reconnectMysql(): void
+    private function needsInstall(): bool
     {
-        $connection = (string) config('database.default');
+        return ! $this->isInstalled() || $this->hasPendingMigrations();
+    }
 
-        if (! in_array($connection, ['mysql', 'mariadb'], true)) {
-            return;
-        }
-
+    private function hasPendingMigrations(): bool
+    {
         try {
-            DB::purge('mysql');
-            DB::reconnect('mysql');
+            $migrator = app('migrator');
 
-            if ($connection === 'mariadb') {
-                DB::purge('mariadb');
-                DB::reconnect('mariadb');
+            if (! $migrator->repositoryExists()) {
+                return true;
             }
-        } catch (QueryException $e) {
-            $this->logQueryException($e, 'Failed to reconnect MySQL during application setup.');
-            throw $e;
+
+            $files = $migrator->getMigrationFiles(database_path('migrations'));
+            $pending = array_diff(array_keys($files), $migrator->getRan());
+
+            return $pending !== [];
+        } catch (Throwable) {
+            return true;
         }
     }
 
-    private function setupAlreadyCompleted(): bool
+    /**
+     * @return list<string>
+     */
+    private function migrationFileNames(): array
     {
-        return is_file($this->completedLockPath());
-    }
+        $directory = database_path('migrations');
 
-    private function markSetupCompleted(): void
-    {
-        if (app()->environment('testing')) {
-            return;
+        if (! is_dir($directory)) {
+            return [];
         }
 
-        $path = $this->completedLockPath();
-        $directory = dirname($path);
+        $files = scandir($directory);
+
+        if ($files === false) {
+            return [];
+        }
+
+        $names = [];
+
+        foreach ($files as $file) {
+            if (str_ends_with($file, '.php')) {
+                $names[] = $file;
+            }
+        }
+
+        sort($names);
+
+        return $names;
+    }
+
+    private function markSetupReady(): void
+    {
+        $directory = storage_path('framework');
 
         if (! is_dir($directory)) {
             mkdir($directory, 0755, true);
         }
 
-        $written = file_put_contents(
-            $path,
-            'completed_at='.now()->toIso8601String().PHP_EOL,
-            LOCK_EX
+        file_put_contents(
+            $this->setupReadyPath(),
+            implode("\n", $this->migrationFileNames())."\n"
         );
-
-        if ($written === false) {
-            Log::error('Database setup finished but the completion lock could not be written.', [
-                'path' => $path,
-            ]);
-        }
     }
 
-    private function completedLockPath(): string
+    private function setupReadyPath(): string
     {
-        return storage_path('framework/setup_completed.lock');
-    }
-
-    private function settingValue(string $envKey, string $configKey, mixed $default): mixed
-    {
-        $fromEnv = env($envKey);
-
-        if ($fromEnv !== null && $fromEnv !== '') {
-            return $fromEnv;
-        }
-
-        $fromConfig = config($configKey);
-
-        if ($fromConfig !== null && $fromConfig !== '') {
-            return $fromConfig;
-        }
-
-        return $default;
-    }
-
-    private function passwordValue(string $connection): string
-    {
-        $fromEnv = env('DB_PASSWORD');
-
-        if ($fromEnv !== null) {
-            return (string) $fromEnv;
-        }
-
-        return (string) config("database.connections.{$connection}.password", '');
-    }
-
-    private function logQueryException(QueryException $e, string $message): void
-    {
-        Log::error($message, [
-            'sql' => $e->getSql(),
-            'bindings' => $e->getBindings(),
-            'error' => $e->getMessage(),
-            'code' => $e->getCode(),
-            'connection' => config('database.default'),
-            'host' => config('database.connections.mysql.host'),
-            'port' => config('database.connections.mysql.port'),
-            'database' => config('database.connections.mysql.database'),
-            'username' => config('database.connections.mysql.username'),
-        ]);
+        return storage_path('framework/setup.ready');
     }
 
     private function ensureEnvironment(): void
@@ -384,14 +299,6 @@ class ApplicationSetupService
             DB::connection($connection)->statement(
                 "CREATE DATABASE IF NOT EXISTS `{$database}` CHARACTER SET {$charset} COLLATE {$collation}"
             );
-        } catch (QueryException $e) {
-            Log::warning('CREATE DATABASE is not permitted (typical on cPanel). Continuing with the existing database.', [
-                'sql' => $e->getSql(),
-                'error' => $e->getMessage(),
-                'code' => $e->getCode(),
-                'database' => $database,
-                'username' => config("database.connections.{$connection}.username"),
-            ]);
         } catch (Throwable) {
             // Shared hosts often forbid CREATE DATABASE; migrate will surface a clearer error.
         } finally {

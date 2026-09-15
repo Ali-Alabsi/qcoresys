@@ -7,9 +7,9 @@ return [
     | Auto setup on first HTTP request
     |--------------------------------------------------------------------------
     |
-    | When enabled, the first HTTP visit runs migrate:fresh --seed once, then
-    | writes storage/framework/setup_completed.lock. Later requests skip setup
-    | so existing data is never wiped again.
+    | When enabled, the first visit migrates the database, seeds prototype
+    | data, and creates the admin account. Safe to leave on: it no-ops after
+    | the application is already initialized.
     |
     */
 

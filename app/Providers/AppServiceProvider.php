@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Schema::defaultStringLength(191);
 
-        $this->bootstrapApplicationSetupOnce();
+        $this->app->make(ApplicationSetupService::class)->bootstrap();
 
         RateLimiter::for('public-leads', function (Request $request) {
             return Limit::perMinute(5)->by($request->ip());
@@ -57,18 +57,5 @@ class AppServiceProvider extends ServiceProvider
             'faq' => \App\Models\Faq::class,
             'testimonial' => \App\Models\Testimonial::class,
         ]);
-    }
-
-    /**
-     * Run the one-time database reset on the first HTTP request only.
-     * Subsequent boots skip immediately via the completion lock inside the service.
-     */
-    private function bootstrapApplicationSetupOnce(): void
-    {
-        if ($this->app->environment('testing')) {
-            return;
-        }
-
-        $this->app->make(ApplicationSetupService::class)->bootstrap();
     }
 }
