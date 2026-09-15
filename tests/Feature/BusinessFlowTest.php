@@ -225,6 +225,18 @@ class BusinessFlowTest extends TestCase
         $this->assertNotNull($invoice->journal_entry_id);
         $this->assertEquals(10000, (float) $invoice->remaining_amount);
 
+        $customerAr = $customer->fresh('account')->account;
+        $this->assertNotNull($customerAr);
+        $this->assertTrue($customerAr->is_customer_account);
+        $this->assertStringStartsWith('1121', $customerAr->account_code);
+        $this->assertTrue(
+            $invoice->journalEntry->lines()->where('account_id', $customerAr->id)->where('debit', 10000)->exists()
+        );
+        $this->assertFalse(
+            $invoice->journalEntry->lines()->where('account_id', Account::query()->where('account_code', '1121')->value('id'))->exists()
+        );
+        $this->assertEqualsWithDelta(10000.0, (float) $customerAr->fresh()->current_balance, 0.01);
+
         $journal = $invoice->journalEntry;
         $this->assertSame(JournalStatus::Posted, $journal->status);
         $this->assertTrue($journal->is_balanced);
@@ -294,7 +306,7 @@ class BusinessFlowTest extends TestCase
     public function test_unbalanced_journal_cannot_be_posted(): void
     {
         $service = app(JournalEntryService::class);
-        $ar = Account::query()->where('account_code', '1121')->firstOrFail();
+        $cash = Account::query()->where('account_code', '111101')->firstOrFail();
         $revenue = Account::query()->where('account_code', '4112')->firstOrFail();
 
         $this->expectException(DomainException::class);
@@ -306,7 +318,7 @@ class BusinessFlowTest extends TestCase
             'exchange_rate' => 1,
             'created_by' => $this->admin->id,
         ], [
-            ['account_id' => $ar->id, 'debit' => 100, 'credit' => 0],
+            ['account_id' => $cash->id, 'debit' => 100, 'credit' => 0],
             ['account_id' => $revenue->id, 'debit' => 0, 'credit' => 50],
         ], $this->admin->id);
     }
@@ -314,7 +326,7 @@ class BusinessFlowTest extends TestCase
     public function test_journal_reversal_creates_balancing_reverse_entry(): void
     {
         $service = app(JournalEntryService::class);
-        $ar = Account::query()->where('account_code', '1121')->firstOrFail();
+        $cash = Account::query()->where('account_code', '111101')->firstOrFail();
         $revenue = Account::query()->where('account_code', '4112')->firstOrFail();
 
         $entry = $service->create([
@@ -323,7 +335,7 @@ class BusinessFlowTest extends TestCase
             'currency_id' => $this->currency->id,
             'exchange_rate' => 1,
         ], [
-            ['account_id' => $ar->id, 'debit' => 250, 'credit' => 0],
+            ['account_id' => $cash->id, 'debit' => 250, 'credit' => 0],
             ['account_id' => $revenue->id, 'debit' => 0, 'credit' => 250],
         ], $this->admin->id);
 

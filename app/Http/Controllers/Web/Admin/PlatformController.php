@@ -88,11 +88,21 @@ class PlatformController extends Controller
         return redirect()->route('admin.customers.show', $customer)->with('status', __('Customer created.'));
     }
 
-    public function customersShow(Customer $customer): View
+    public function customersShow(Customer $customer, AccountBalanceService $balances): View
     {
-        $customer->load(['requests', 'quotations', 'invoices']);
+        $customer->load(['requests', 'quotations', 'invoices', 'account']);
+
+        if ($customer->account) {
+            $balance = $balances->balanceAsOf($customer->account, now()->toDateString());
+            $customer->setAttribute(
+                'receivable_balance',
+                number_format((float) $balance['foreign'], 2)
+            );
+        }
+
         return view('admin.shared.show', ['title' => $customer->name, 'record' => $customer, 'fields' => [
-            'customer_code', 'customer_type', 'email', 'phone', 'city', 'status', 'notes',
+            'customer_code', 'customer_type', 'email', 'phone', 'city', 'status',
+            'account.account_code', 'receivable_balance', 'notes',
         ]]);
     }
 
@@ -272,13 +282,23 @@ class PlatformController extends Controller
 
     public function invoiceApprove(Request $request, Invoice $invoice, InvoiceService $service): RedirectResponse
     {
-        $service->approve($invoice, $request->user()->id);
+        try {
+            $service->approve($invoice, $request->user()->id);
+        } catch (DomainException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
         return back()->with('status', __('Invoice approved.'));
     }
 
     public function invoicePost(Request $request, Invoice $invoice, InvoiceService $service): RedirectResponse
     {
-        $service->post($invoice, $request->user()->id);
+        try {
+            $service->post($invoice, $request->user()->id);
+        } catch (DomainException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
         return back()->with('status', __('Invoice posted.'));
     }
 

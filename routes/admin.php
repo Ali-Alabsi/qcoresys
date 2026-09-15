@@ -39,6 +39,21 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::post('quotations/{quotation}/send', [PlatformController::class, 'quotationSend'])->middleware('permission:quotations.send')->name('quotations.send');
         Route::get('quotations/{quotation}/pdf', [PdfController::class, 'quotation'])->middleware('permission:quotations.view')->name('quotations.pdf');
 
+        Route::get('invoices', [PlatformController::class, 'invoicesIndex'])->middleware('permission:invoices.view')->name('invoices.index');
+        Route::get('invoices/create', [PlatformController::class, 'invoicesCreate'])->middleware('permission:invoices.create')->name('invoices.create');
+        Route::post('invoices', [PlatformController::class, 'invoicesStore'])->middleware('permission:invoices.create')->name('invoices.store');
+        Route::get('invoices/{invoice}', [PlatformController::class, 'invoicesShow'])->middleware('permission:invoices.view')->name('invoices.show');
+        Route::get('invoices/{invoice}/edit', [PlatformController::class, 'invoicesEdit'])->middleware('permission:invoices.update')->name('invoices.edit');
+        Route::put('invoices/{invoice}', [PlatformController::class, 'invoicesUpdate'])->middleware('permission:invoices.update')->name('invoices.update');
+        Route::post('invoices/{invoice}/approve', [PlatformController::class, 'invoiceApprove'])->middleware('permission:invoices.approve')->name('invoices.approve');
+        Route::post('invoices/{invoice}/post', [PlatformController::class, 'invoicePost'])->middleware('permission:invoices.post')->name('invoices.post');
+        Route::get('invoices/{invoice}/pdf', [PdfController::class, 'invoice'])->middleware('permission:invoices.view')->name('invoices.pdf');
+
+        Route::get('payments', [PlatformController::class, 'paymentsIndex'])->middleware('permission:payments.view')->name('payments.index');
+        Route::get('payments/create', [PlatformController::class, 'paymentsCreate'])->middleware('permission:payments.create')->name('payments.create');
+        Route::post('payments', [PlatformController::class, 'paymentsStore'])->middleware('permission:payments.create')->name('payments.store');
+        Route::post('payments/{payment}/post', [PlatformController::class, 'paymentPost'])->middleware('permission:payments.post')->name('payments.post');
+
         Route::get('accounts', [PlatformController::class, 'accountsIndex'])->middleware('permission:accounts.view')->name('accounts.index');
 
         Route::get('exchange-rates', [PlatformController::class, 'exchangeRatesIndex'])->middleware('permission:exchange_rates.view')->name('exchange-rates.index');

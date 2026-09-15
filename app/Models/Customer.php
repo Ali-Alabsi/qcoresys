@@ -41,6 +41,7 @@ class Customer extends Model
         'customer_source',
         'status',
         'default_currency_id',
+        'account_id',
         'credit_limit',
         'payment_terms_days',
         'assigned_to',
@@ -158,6 +159,11 @@ class Customer extends Model
     public function defaultCurrency(): BelongsTo
     {
         return $this->belongsTo(Currency::class, 'default_currency_id');
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     public function creator(): BelongsTo

@@ -13,6 +13,7 @@ class CustomerService
 {
     public function __construct(
         protected AuditService $auditService,
+        protected CustomerAccountService $customerAccountService,
     ) {}
 
     public function create(array $data, ?int $createdBy = null): Customer
@@ -25,9 +26,11 @@ class CustomerService
                 'updated_by' => $createdBy,
             ]);
 
-            $this->auditService->logModelEvent($customer, AuditAction::Create);
+            $this->customerAccountService->ensureFor($customer);
 
-            return $customer->fresh();
+            $this->auditService->logModelEvent($customer->fresh(), AuditAction::Create);
+
+            return $customer->fresh('account');
         });
     }
 
@@ -41,14 +44,18 @@ class CustomerService
                 'updated_by' => $updatedBy ?? $customer->updated_by,
             ]);
 
+            $fresh = $customer->fresh();
+            $this->customerAccountService->ensureFor($fresh);
+            $this->customerAccountService->syncName($fresh);
+
             $this->auditService->logModelEvent(
-                $customer->fresh(),
+                $fresh->fresh(),
                 AuditAction::Update,
                 $oldValues,
-                $customer->getAttributes(),
+                $fresh->fresh()->getAttributes(),
             );
 
-            return $customer->fresh();
+            return $fresh->fresh('account');
         });
     }
 

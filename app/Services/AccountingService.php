@@ -15,6 +15,7 @@ class AccountingService
 {
     public function __construct(
         protected JournalEntryService $journalEntryService,
+        protected CustomerAccountService $customerAccountService,
     ) {}
 
     public function getSettingAccountId(string $key): int
@@ -30,18 +31,26 @@ class AccountingService
 
     public function postInvoice(Invoice $invoice, ?int $postedBy = null): JournalEntry
     {
-        $arAccountId = $this->getSettingAccountId('account_ar');
+        $invoice->loadMissing('customer');
+        $arAccountId = $this->customerReceivableAccountId($invoice->customer);
         $revenueAccountId = $invoice->project_id
             ? $this->getSettingAccountId('account_revenue_project')
             : $this->getSettingAccountId('account_revenue_consulting');
 
-        $amount = (float) $invoice->total_amount;
+        $signedAmount = (float) $invoice->total_amount;
+
+        if (abs($signedAmount) < 0.005) {
+            throw new DomainException(__('Invoice total must not be zero.'));
+        }
+
+        $amount = abs($signedAmount);
+        $isCreditNote = $signedAmount < 0;
 
         $entry = $this->journalEntryService->create([
             'entry_date' => $invoice->invoice_date?->toDateString() ?? now()->toDateString(),
             'reference_type' => 'invoice',
             'reference_id' => $invoice->id,
-            'description' => 'Invoice '.$invoice->invoice_no,
+            'description' => ($isCreditNote ? 'Credit note ' : 'Invoice ').$invoice->invoice_no,
             'currency_id' => $invoice->currency_id,
             'exchange_rate' => $invoice->exchange_rate ?? 1,
             'created_by' => $postedBy,
@@ -50,17 +59,17 @@ class AccountingService
                 'account_id' => $arAccountId,
                 'customer_id' => $invoice->customer_id,
                 'project_id' => $invoice->project_id,
-                'description' => 'Accounts receivable',
-                'debit' => $amount,
-                'credit' => 0,
+                'description' => $isCreditNote ? 'Accounts receivable credit' : 'Accounts receivable',
+                'debit' => $isCreditNote ? 0 : $amount,
+                'credit' => $isCreditNote ? $amount : 0,
             ],
             [
                 'account_id' => $revenueAccountId,
                 'customer_id' => $invoice->customer_id,
                 'project_id' => $invoice->project_id,
-                'description' => 'Revenue',
-                'debit' => 0,
-                'credit' => $amount,
+                'description' => $isCreditNote ? 'Revenue reversal' : 'Revenue',
+                'debit' => $isCreditNote ? $amount : 0,
+                'credit' => $isCreditNote ? 0 : $amount,
             ],
         ], $postedBy);
 
@@ -69,7 +78,8 @@ class AccountingService
 
     public function postPayment(Payment $payment, ?int $postedBy = null): JournalEntry
     {
-        $arAccountId = $this->getSettingAccountId('account_ar');
+        $payment->loadMissing('customer');
+        $arAccountId = $this->customerReceivableAccountId($payment->customer);
         $cashOrBankId = $payment->account_id
             ?: $this->getSettingAccountId('account_bank');
 
@@ -154,5 +164,16 @@ class AccountingService
     public function expenseAccounts(): \Illuminate\Database\Eloquent\Collection
     {
         return Account::query()->where('account_type', AccountType::Expense)->get();
+    }
+
+    protected function customerReceivableAccountId(?\App\Models\Customer $customer): int
+    {
+        if (! $customer) {
+            throw new DomainException('Customer is required for accounts receivable posting.');
+        }
+
+        $account = $this->customerAccountService->ensureFor($customer);
+
+        return $account->id;
     }
 }

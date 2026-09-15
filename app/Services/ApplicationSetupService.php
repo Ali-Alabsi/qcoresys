@@ -148,11 +148,13 @@ class ApplicationSetupService
             }
 
             $files = $migrator->getMigrationFiles(database_path('migrations'));
-            $pending = array_diff(array_keys($files), $migrator->getRan());
+            $ran = $migrator->getRepository()->getRan();
 
-            return $pending !== [];
+            return array_diff(array_keys($files), $ran) !== [];
         } catch (Throwable) {
-            return true;
+            // Never treat a lookup failure as "pending": that re-ran migrate/seed
+            // on login POSTs and expired the CSRF session (HTTP 419).
+            return false;
         }
     }
 

@@ -23,7 +23,6 @@ class ChartOfAccountsSeeder extends Seeder
         '3111', '3112', '3211', '3212', '3311', '3312', '3411', '3412',
         '111101', '111102', '111103', '111104',
         '111201', '111202', '111203', '111204',
-        '1121', '1122', '1123',
         '4111', '4112', '4113', '4114', '4115',
         '5111', '5112', '5113', '5114', '5115', '5116',
         '4199', '5199', '2111', '2121', '2122',
@@ -55,6 +54,7 @@ class ChartOfAccountsSeeder extends Seeder
     private function seedNode(array $node, ?int $parentId, int $level): void
     {
         $isLeaf = empty($node['children']);
+        $isControl = ! $isLeaf || (bool) ($node['control'] ?? false);
         $currencyCode = $node['currency'] ?? null;
         $active = (bool) ($node['active'] ?? true);
 
@@ -68,12 +68,12 @@ class ChartOfAccountsSeeder extends Seeder
                 'account_level' => $level,
                 'normal_balance' => $node['normal'],
                 'currency_id' => $currencyCode ? ($this->currencyIds[$currencyCode] ?? null) : null,
-                'is_control_account' => ! $isLeaf,
+                'is_control_account' => $isControl,
                 'is_cash_account' => (bool) ($node['cash'] ?? false),
                 'is_bank_account' => (bool) ($node['bank'] ?? false),
                 'is_customer_account' => (bool) ($node['ar'] ?? false),
                 'is_vendor_account' => (bool) ($node['ap'] ?? false),
-                'allow_posting' => $isLeaf && $active,
+                'allow_posting' => ! $isControl && $isLeaf && $active,
                 'description' => $node['description'] ?? null,
                 'is_active' => $active,
                 'opening_balance' => 0,
@@ -94,6 +94,7 @@ class ChartOfAccountsSeeder extends Seeder
     {
         Account::query()
             ->where('is_control_account', false)
+            ->where('is_customer_account', false)
             ->whereNotIn('account_code', self::ACTIVE_LEAF_CODES)
             ->update(['is_active' => false, 'allow_posting' => false]);
     }
@@ -219,19 +220,19 @@ class ChartOfAccountsSeeder extends Seeder
                                 'children' => [
                                     [
                                         'code' => '1121', 'name' => 'AR Customers USD', 'type' => $asset, 'normal' => $dr,
-                                        'currency' => 'USD', 'ar' => true,
+                                        'currency' => 'USD', 'ar' => true, 'control' => true,
                                         'name_ar' => 'ذمم العملاء - جاري - دولار امريكي',
                                         'description' => 'ذمم العملاء - جاري - دولار امريكي',
                                     ],
                                     [
                                         'code' => '1122', 'name' => 'AR Customers YER', 'type' => $asset, 'normal' => $dr,
-                                        'currency' => 'YER', 'ar' => true,
+                                        'currency' => 'YER', 'ar' => true, 'control' => true,
                                         'name_ar' => 'ذمم العملاء - جاري - ريال يمني',
                                         'description' => 'ذمم العملاء - جاري - ريال يمني',
                                     ],
                                     [
                                         'code' => '1123', 'name' => 'AR Customers SAR', 'type' => $asset, 'normal' => $dr,
-                                        'currency' => 'SAR', 'ar' => true,
+                                        'currency' => 'SAR', 'ar' => true, 'control' => true,
                                         'name_ar' => 'ذمم العملاء - جاري - ريال سعودي',
                                         'description' => 'ذمم العملاء - جاري - ريال سعودي',
                                     ],

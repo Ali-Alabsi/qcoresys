@@ -74,6 +74,16 @@ class ApplicationSetupTest extends TestCase
         ])->assertRedirect(route('admin.dashboard'));
     }
 
+    public function test_has_pending_migrations_reads_repository_ran_list(): void
+    {
+        $setup = app(ApplicationSetupService::class);
+        $setup->install();
+
+        $method = new \ReflectionMethod(ApplicationSetupService::class, 'hasPendingMigrations');
+
+        $this->assertFalse($method->invoke($setup));
+    }
+
     public function test_second_install_is_noop_when_setup_ready(): void
     {
         $setup = app(ApplicationSetupService::class);

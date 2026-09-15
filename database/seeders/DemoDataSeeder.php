@@ -7,6 +7,7 @@ use App\Enums\CustomerType;
 use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\User;
+use App\Services\CustomerAccountService;
 use Illuminate\Database\Seeder;
 
 class DemoDataSeeder extends Seeder
@@ -16,9 +17,10 @@ class DemoDataSeeder extends Seeder
         $admin = User::query()
             ->where('email', config('setup.admin.email'))
             ->first()
-            ?? User::query()->where('email', 'admin@qcoressys.local')->first();
+            ?? User::query()->where('email', 'admin@qcoresys.local')->first();
 
         $usdId = Currency::query()->where('code', 'USD')->value('id');
+        $accounts = app(CustomerAccountService::class);
 
         $portal = $this->upsertUser([
             'email' => (string) config('setup.portal.email', 'portal@qcoresys.com'),
@@ -27,7 +29,7 @@ class DemoDataSeeder extends Seeder
             'password' => (string) config('setup.portal.password', 'password'),
         ]);
 
-        Customer::query()->updateOrCreate(
+        $portalCustomer = Customer::query()->updateOrCreate(
             ['email' => $portal->email],
             [
                 'customer_code' => 'CUS-DEMO-PORTAL',
@@ -45,8 +47,10 @@ class DemoDataSeeder extends Seeder
                 'created_by' => $admin?->id,
             ]
         );
+        $accounts->ensureFor($portalCustomer);
+        $accounts->syncName($portalCustomer->fresh());
 
-        Customer::query()->updateOrCreate(
+        $companyCustomer = Customer::query()->updateOrCreate(
             ['email' => 'demo.company@qcoresys.com'],
             [
                 'customer_code' => 'CUS-DEMO-COMPANY',
@@ -65,6 +69,10 @@ class DemoDataSeeder extends Seeder
                 'notes' => 'Prototype demo customer for the admin CRM.',
             ]
         );
+        $accounts->ensureFor($companyCustomer);
+        $accounts->syncName($companyCustomer->fresh());
+
+        $accounts->ensureForAllMissing();
     }
 
     /**
@@ -78,7 +86,6 @@ class DemoDataSeeder extends Seeder
             'username' => $data['username'],
             'name' => $data['name'],
             'is_active' => true,
-            'email_verified_at' => $user->email_verified_at ?? now(),
         ]);
 
         if (! $user->exists) {

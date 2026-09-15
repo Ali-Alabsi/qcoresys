@@ -4,7 +4,9 @@ namespace Database\Factories;
 
 use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
+use App\Models\Account;
 use App\Models\Customer;
+use App\Services\CustomerAccountService;
 use Database\Factories\Concerns\ResolvesCurrency;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -41,5 +43,20 @@ class CustomerFactory extends Factory
             'credit_limit' => fake()->randomFloat(2, 10000, 500000),
             'payment_terms_days' => fake()->randomElement([15, 30, 45, 60]),
         ];
+    }
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Customer $customer) {
+            if ($customer->account_id) {
+                return;
+            }
+
+            if (! Account::query()->where('account_code', '1121')->exists()) {
+                return;
+            }
+
+            app(CustomerAccountService::class)->ensureFor($customer);
+        });
     }
 }

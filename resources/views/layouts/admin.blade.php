@@ -22,6 +22,8 @@
                     ['customers.view', 'admin.customers.index', __('Customers'), ['admin.customers.*']],
                     ['customer_requests.view', 'admin.customer-requests.index', __('Requests'), ['admin.customer-requests.*']],
                     ['quotations.view', 'admin.quotations.index', __('Quotations'), ['admin.quotations.*']],
+                    ['invoices.view', 'admin.invoices.index', __('Invoices'), ['admin.invoices.*']],
+                    ['payments.view', 'admin.payments.index', __('Payments'), ['admin.payments.*']],
                     ['accounts.view', 'admin.accounts.index', __('Accounts'), ['admin.accounts.*']],
                     ['journals.view', 'admin.journals.index', __('Financial operations'), ['admin.journals.index', 'admin.journals.show', 'admin.journals.create']],
                     ['exchange_rates.view', 'admin.exchange-rates.index', __('Exchange rates'), ['admin.exchange-rates.*']],

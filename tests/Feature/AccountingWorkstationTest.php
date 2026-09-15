@@ -94,6 +94,12 @@ class AccountingWorkstationTest extends TestCase
             $this->assertSame('USD', $account->currency?->code, $code);
             $this->assertSame($nameAr, $account->account_name_ar, $code);
         }
+
+        foreach (['1121', '1122', '1123'] as $code) {
+            $account = Account::query()->where('account_code', $code)->firstOrFail();
+            $this->assertTrue($account->is_control_account, $code);
+            $this->assertFalse($account->allow_posting, $code);
+        }
     }
 
     public function test_posting_balanced_journal_persists_and_updates_balances(): void

@@ -7,6 +7,7 @@ use App\Enums\CustomerType;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\User;
+use App\Services\CustomerAccountService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -45,7 +46,7 @@ class AuthController extends Controller
                 'is_active' => true,
             ]);
 
-            Customer::create([
+            $customer = Customer::create([
                 'portal_user_id' => $user->id,
                 'customer_type' => CustomerType::from($data['customer_type']),
                 'name' => $data['name'],
@@ -55,6 +56,8 @@ class AuthController extends Controller
                 'status' => CustomerStatus::Active,
                 'customer_source' => 'PORTAL',
             ]);
+
+            app(CustomerAccountService::class)->ensureFor($customer);
 
             return $user;
         });

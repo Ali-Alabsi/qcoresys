@@ -46,9 +46,12 @@ class JournalEntryService
 
             foreach ($lines as $index => $line) {
                 $rate = (float) ($line['exchange_rate'] ?? $header['exchange_rate'] ?? 1);
-                $debit = (float) ($line['debit'] ?? 0);
-                $credit = (float) ($line['credit'] ?? 0);
-                $computed = $this->lineBaseAmounts($line, $rate);
+                [$debit, $credit] = $this->normalizedDebitCredit(
+                    (float) ($line['debit'] ?? 0),
+                    (float) ($line['credit'] ?? 0),
+                );
+                $normalizedLine = [...$line, 'debit' => $debit, 'credit' => $credit];
+                $computed = $this->lineBaseAmounts($normalizedLine, $rate);
 
                 JournalEntryLine::create([
                     'journal_entry_id' => $entry->id,
@@ -218,9 +221,11 @@ class JournalEntryService
 
         foreach ($lines as $line) {
             $rate = (float) ($line['exchange_rate'] ?? $defaultRate);
-            $d = (float) ($line['debit'] ?? 0);
-            $c = (float) ($line['credit'] ?? 0);
-            $computed = $this->lineBaseAmounts($line, $rate);
+            [$d, $c] = $this->normalizedDebitCredit(
+                (float) ($line['debit'] ?? 0),
+                (float) ($line['credit'] ?? 0),
+            );
+            $computed = $this->lineBaseAmounts(['debit' => $d, 'credit' => $c], $rate);
             $debit += $d;
             $credit += $c;
             $debitBase += $computed['debit_base'];
@@ -260,7 +265,8 @@ class JournalEntryService
     }
 
     /**
-     * Reject entries that would overdraw any account (all CoA accounts).
+     * Reject entries that would overdraw cash/bank accounts.
+     * Receivable, revenue, expense and equity accounts may carry either side.
      *
      * @param  array<int, array<string, mixed>>  $lines
      */
@@ -274,9 +280,14 @@ class JournalEntryService
                 continue;
             }
 
+            [$debit, $credit] = $this->normalizedDebitCredit(
+                (float) ($line['debit'] ?? 0),
+                (float) ($line['credit'] ?? 0),
+            );
+
             $grouped[$accountId] ??= ['debit' => 0.0, 'credit' => 0.0];
-            $grouped[$accountId]['debit'] = Money::add($grouped[$accountId]['debit'], $line['debit'] ?? 0);
-            $grouped[$accountId]['credit'] = Money::add($grouped[$accountId]['credit'], $line['credit'] ?? 0);
+            $grouped[$accountId]['debit'] = Money::add($grouped[$accountId]['debit'], $debit);
+            $grouped[$accountId]['credit'] = Money::add($grouped[$accountId]['credit'], $credit);
         }
 
         if ($grouped === []) {
@@ -290,6 +301,10 @@ class JournalEntryService
             $account = $accounts->get($accountId);
             if (! $account) {
                 throw new DomainException(__('Account not found for journal line.'));
+            }
+
+            if (! $account->is_cash_account && ! $account->is_bank_account) {
+                continue;
             }
 
             $reduction = $account->normal_balance === NormalBalance::Debit
@@ -310,6 +325,24 @@ class JournalEntryService
                 ]));
             }
         }
+    }
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    protected function normalizedDebitCredit(float $debit, float $credit): array
+    {
+        if ($debit < 0) {
+            $credit = Money::add($credit, -$debit);
+            $debit = 0.0;
+        }
+
+        if ($credit < 0) {
+            $debit = Money::add($debit, -$credit);
+            $credit = 0.0;
+        }
+
+        return [Money::round($debit), Money::round($credit)];
     }
 
     /**

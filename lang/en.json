@@ -150,5 +150,17 @@
     "account_type.EQUITY": "Equity",
     "account_type.REVENUE": "Revenue",
     "account_type.EXPENSE": "Expenses",
-    "No active accounts.": "No active accounts."
+    "No active accounts.": "No active accounts.",
+    "Invoices": "Invoices",
+    "Payments": "Payments",
+    "fields.account.account_code": "AR account",
+    "fields.receivable_balance": "Receivable balance",
+    "Customer created.": "Customer created.",
+    "Invoice created.": "Invoice created.",
+    "Invoice updated.": "Invoice updated.",
+    "Invoice approved.": "Invoice approved.",
+    "Invoice posted.": "Invoice posted.",
+    "Invoice total must not be zero.": "Invoice total must not be zero.",
+    "Payment created: :number": "Payment created: :number",
+    "Payment posted.": "Payment posted."
 }
