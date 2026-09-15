@@ -50,12 +50,11 @@
             </div>
         </header>
         <main class="p-4 sm:p-8">
-            @if (session('status'))<div class="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm">{{ session('status') }}</div>@endif
-            @if ($errors->any())<div class="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><ul class="list-disc ps-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
             @yield('content')
         </main>
     </div>
 </div>
+@include('partials.app-flash')
 @stack('scripts')
 </body>
 </html>

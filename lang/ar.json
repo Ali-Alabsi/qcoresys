@@ -578,5 +578,11 @@
     "enums.SUPPORT": "دعم",
     "enums.SECURITY": "أمن",
     "Please wait": "يرجى الانتظار",
-    "Loading": "جاري التحميل"
+    "Loading": "جاري التحميل",
+    "Success": "تمت العملية بنجاح",
+    "Failed": "فشلت العملية",
+    "Warning": "تنبيه",
+    "OK": "موافق",
+    "Operation completed successfully": "تمت العملية بنجاح",
+    "Operation failed": "فشلت العملية"
 }

@@ -257,9 +257,18 @@
     calculateJournalTotals();
   }
 
+  function notify(type, message, onClose) {
+    if (window.AppDialog && typeof window.AppDialog[type] === 'function') {
+      window.AppDialog[type](message, onClose);
+      return;
+    }
+    window.alert(message);
+    if (typeof onClose === 'function') onClose();
+  }
+
   function removeEntryRow(btn) {
     if (document.querySelectorAll('.entry-line').length <= 2) {
-      alert('يجب طرفان على الأقل.');
+      notify('warning', 'يجب طرفان على الأقل.');
       return;
     }
     btn.closest('.entry-line').remove();
@@ -299,7 +308,9 @@
     document.getElementById('journalModalBackdrop')?.addEventListener('click', closeModal);
     document.getElementById('btnAddRow')?.addEventListener('click', addEntryRow);
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+      if (e.key === 'Escape' && modal.classList.contains('is-open') && !document.documentElement.classList.contains('app-dialog-open')) {
+        closeModal();
+      }
     });
 
     if (config.openOnLoad) openModal();
@@ -312,12 +323,12 @@
         const accCode = row.querySelector('.account-select').value;
         const debit = parseFloat(row.querySelector('.debit-input').value) || 0;
         const credit = parseFloat(row.querySelector('.credit-input').value) || 0;
-        if (!accCode) { alert('اختر الحساب.'); isValid = false; return; }
-        if (debit > 0 && credit > 0) { alert('لا مدين ودائن معاً.'); isValid = false; return; }
+        if (!accCode) { notify('warning', 'اختر الحساب.'); isValid = false; return; }
+        if (debit > 0 && credit > 0) { notify('warning', 'لا مدين ودائن معاً.'); isValid = false; return; }
         if (debit > 0 || credit > 0) lines.push({ account_code: accCode, debit, credit });
       });
       if (!isValid || lines.length < 2) {
-        if (isValid) alert('طرفان على الأقل.');
+        if (isValid) notify('warning', 'طرفان على الأقل.');
         return;
       }
 
@@ -341,14 +352,26 @@
             lines,
           }),
         });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || 'فشل الترحيل.');
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_) {
+          data = {};
         }
-        alert('تم ترحيل القيد بنجاح.');
-        window.location.href = config.operationsUrl;
+
+        if (!response.ok) {
+          const validation = data.errors
+            ? Object.values(data.errors).flat().filter(Boolean).join('\n')
+            : '';
+          throw new Error(data.message || validation || 'فشل الترحيل.');
+        }
+
+        notify('success', data.message || 'تم ترحيل القيد بنجاح.', () => {
+          window.location.href = config.operationsUrl;
+        });
       } catch (err) {
-        alert(err.message || 'حدث خطأ.');
+        notify('error', err.message || 'حدث خطأ.');
         btn.innerHTML = original;
         calculateJournalTotals();
       }

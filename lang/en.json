@@ -138,5 +138,11 @@
     "Previous": "Previous",
     "Next page": "Next page",
     "Please wait": "Please wait",
-    "Loading": "Loading"
+    "Loading": "Loading",
+    "Success": "Success",
+    "Failed": "Failed",
+    "Warning": "Warning",
+    "OK": "OK",
+    "Operation completed successfully": "Operation completed successfully",
+    "Operation failed": "Operation failed"
 }

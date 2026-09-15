@@ -26,18 +26,11 @@
     @include('public.partials.header')
 
     <main id="main-content" class="flex-1">
-        @if (session('status'))
-            <div class="container-public section-padding !py-4">
-                <div class="rounded-xl border border-brand-cyan/30 bg-brand-cyan/10 px-4 py-3 text-sm text-brand-navy" role="status">
-                    {{ session('status') }}
-                </div>
-            </div>
-        @endif
-
         @yield('content')
     </main>
 
     @include('public.partials.footer')
+    @include('partials.app-flash')
     @stack('scripts')
 </body>
 </html>
