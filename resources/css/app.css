@@ -89,4 +89,65 @@
     [x-cloak] {
         display: none !important;
     }
+
+    .app-loading-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: grid;
+        place-items: center;
+        background: rgba(9, 26, 47, 0.55);
+        backdrop-filter: blur(2px);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.15s ease, visibility 0.15s ease;
+    }
+
+    .app-loading-overlay.is-active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    .app-loading-overlay__panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.875rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.96);
+        padding: 1.5rem 1.75rem;
+        box-shadow: 0 16px 40px rgba(9, 26, 47, 0.18);
+    }
+
+    .app-loading-overlay__spinner {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 9999px;
+        border: 3px solid #e5eaf0;
+        border-top-color: #00d2ff;
+        animation: app-loading-spin 0.7s linear infinite;
+    }
+
+    .app-loading-overlay__text {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #091a2f;
+    }
+
+    html.app-loading-active {
+        cursor: wait;
+    }
+
+    html.app-loading-active body {
+        overflow: hidden;
+    }
+
+    @keyframes app-loading-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
 }

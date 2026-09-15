@@ -576,5 +576,7 @@
     "enums.CONSULTING": "استشارات",
     "enums.DEVELOPMENT": "تطوير",
     "enums.SUPPORT": "دعم",
-    "enums.SECURITY": "أمن"
+    "enums.SECURITY": "أمن",
+    "Please wait": "يرجى الانتظار",
+    "Loading": "جاري التحميل"
 }
