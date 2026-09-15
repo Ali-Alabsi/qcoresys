@@ -327,7 +327,7 @@ class PlatformController extends Controller
     }
 
     /**
-     * @return list<array{id:int,code:string,name:string,type:string,balance:float}>
+     * @return list<array{id:int,code:string,name:string,type:string,type_label:string,balance:float}>
      */
     private function accountingAccountsPayload(AccountBalanceService $balances): array
     {
@@ -339,33 +339,19 @@ class PlatformController extends Controller
             ->orderBy('account_code')
             ->get()
             ->map(function (Account $account) use ($balances, $asOf) {
+                $type = $account->account_type;
+
                 return [
                     'id' => $account->id,
                     'code' => $account->account_code,
                     'name' => $account->localized_name,
-                    'type' => $this->accountingUiCategory($account),
+                    'type' => $type->value,
+                    'type_label' => $type->label(),
                     'balance' => (float) $balances->balanceAsOf($account, $asOf)['foreign'],
                 ];
             })
             ->values()
             ->all();
-    }
-
-    private function accountingUiCategory(Account $account): string
-    {
-        if ($account->is_cash_account || $account->is_bank_account) {
-            return 'الصناديق';
-        }
-        if ($account->is_customer_account) {
-            return 'العملاء';
-        }
-
-        return match ($account->account_type) {
-            \App\Enums\AccountType::Equity => 'الشركاء',
-            \App\Enums\AccountType::Revenue => 'الإيرادات',
-            \App\Enums\AccountType::Expense => 'المصروفات',
-            default => 'أخرى',
-        };
     }
 
     public function exchangeRatesIndex(): View

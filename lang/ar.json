@@ -584,5 +584,6 @@
     "Warning": "تنبيه",
     "OK": "موافق",
     "Operation completed successfully": "تمت العملية بنجاح",
-    "Operation failed": "فشلت العملية"
+    "Operation failed": "فشلت العملية",
+    "No active accounts.": "لا توجد حسابات نشطة."
 }

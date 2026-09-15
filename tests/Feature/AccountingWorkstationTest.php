@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountType;
 use App\Enums\JournalStatus;
+use App\Enums\NormalBalance;
 use App\Models\Account;
 use App\Models\JournalEntry;
 use App\Models\User;
@@ -39,7 +41,59 @@ class AccountingWorkstationTest extends TestCase
             ->get(route('admin.accounts.index'))
             ->assertOk()
             ->assertSee('دليل الحسابات', false)
-            ->assertSee('111101', false);
+            ->assertSee('111101', false)
+            ->assertSee('نوع الحساب', false)
+            ->assertSee('الكل', false)
+            ->assertSee('أصول', false)
+            ->assertSee('خصوم', false)
+            ->assertSee('حقوق ملكية', false)
+            ->assertSee('إيرادات', false)
+            ->assertSee('مصروفات', false)
+            ->assertSee("setFilter('ASSET')", false)
+            ->assertSee("setFilter('LIABILITY')", false)
+            ->assertSee('is-active', false)
+            ->assertSee("filter === 'ASSET'", false)
+            ->assertSee('3211', false)
+            ->assertSee('3212', false)
+            ->assertSee('3311', false)
+            ->assertSee('3312', false)
+            ->assertSee('3411', false)
+            ->assertSee('3412', false)
+            ->assertSee('2121', false)
+            ->assertSee('2122', false)
+            ->assertSee('مسحوبات راس مال محمد المحفدي - دولار امريكي', false)
+            ->assertSee('مسحوبات راس مال علي نبيل - دولار امريكي', false)
+            ->assertSee('صافي ربح محمد المحفدي - دولار امريكي', false)
+            ->assertSee('صافي ربح علي نبيل - دولار امريكي', false)
+            ->assertSee('أرباح محتجزة / أرباح مرحلة محمد المحفدي - دولار امريكي', false)
+            ->assertSee('أرباح محتجزة / أرباح مرحلة علي نبيل - دولار امريكي', false)
+            ->assertSee('توزيعات أرباح مستحقة محمد المحفدي - دولار امريكي', false)
+            ->assertSee('توزيعات أرباح مستحقة علي نبيل - دولار امريكي', false);
+    }
+
+    public function test_partner_leaf_accounts_are_postable_usd(): void
+    {
+        $expected = [
+            '2121' => ['توزيعات أرباح مستحقة محمد المحفدي - دولار امريكي', NormalBalance::Credit, AccountType::Liability],
+            '2122' => ['توزيعات أرباح مستحقة علي نبيل - دولار امريكي', NormalBalance::Credit, AccountType::Liability],
+            '3211' => ['مسحوبات راس مال محمد المحفدي - دولار امريكي', NormalBalance::Debit, AccountType::Equity],
+            '3212' => ['مسحوبات راس مال علي نبيل - دولار امريكي', NormalBalance::Debit, AccountType::Equity],
+            '3311' => ['صافي ربح محمد المحفدي - دولار امريكي', NormalBalance::Credit, AccountType::Equity],
+            '3312' => ['صافي ربح علي نبيل - دولار امريكي', NormalBalance::Credit, AccountType::Equity],
+            '3411' => ['أرباح محتجزة / أرباح مرحلة محمد المحفدي - دولار امريكي', NormalBalance::Credit, AccountType::Equity],
+            '3412' => ['أرباح محتجزة / أرباح مرحلة علي نبيل - دولار امريكي', NormalBalance::Credit, AccountType::Equity],
+        ];
+
+        foreach ($expected as $code => [$nameAr, $normal, $type]) {
+            $account = Account::query()->where('account_code', $code)->firstOrFail();
+
+            $this->assertTrue($account->is_active, $code);
+            $this->assertTrue($account->allow_posting, $code);
+            $this->assertSame($type, $account->account_type, $code);
+            $this->assertSame($normal, $account->normal_balance, $code);
+            $this->assertSame('USD', $account->currency?->code, $code);
+            $this->assertSame($nameAr, $account->account_name_ar, $code);
+        }
     }
 
     public function test_posting_balanced_journal_persists_and_updates_balances(): void

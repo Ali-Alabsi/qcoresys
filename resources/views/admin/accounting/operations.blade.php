@@ -235,7 +235,9 @@
       accountsData.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.code;
-        opt.textContent = `${acc.code} - ${acc.name}`;
+        opt.textContent = acc.type_label
+          ? `${acc.code} - ${acc.name} (${acc.type_label})`
+          : `${acc.code} - ${acc.name}`;
         select.appendChild(opt);
       });
       select.value = currentVal;

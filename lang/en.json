@@ -144,5 +144,11 @@
     "Warning": "Warning",
     "OK": "OK",
     "Operation completed successfully": "Operation completed successfully",
-    "Operation failed": "Operation failed"
+    "Operation failed": "Operation failed",
+    "account_type.ASSET": "Assets",
+    "account_type.LIABILITY": "Liabilities",
+    "account_type.EQUITY": "Equity",
+    "account_type.REVENUE": "Revenue",
+    "account_type.EXPENSE": "Expenses",
+    "No active accounts.": "No active accounts."
 }

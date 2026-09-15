@@ -20,13 +20,13 @@ class ChartOfAccountsSeeder extends Seeder
 
     /** Leaf codes from the HTML workstation that remain postable. */
     private const ACTIVE_LEAF_CODES = [
-        '3111', '3112',
+        '3111', '3112', '3211', '3212', '3311', '3312', '3411', '3412',
         '111101', '111102', '111103', '111104',
         '111201', '111202', '111203', '111204',
         '1121', '1122', '1123',
         '4111', '4112', '4113', '4114', '4115',
         '5111', '5112', '5113', '5114', '5115', '5116',
-        '4199', '5199', '2111',
+        '4199', '5199', '2111', '2121', '2122',
     ];
 
     public function run(): void
@@ -261,6 +261,24 @@ class ChartOfAccountsSeeder extends Seeder
                                     ],
                                 ],
                             ],
+                            [
+                                'code' => '2120', 'name' => 'Dividends Payable', 'type' => $liab, 'normal' => $cr,
+                                'description' => 'توزيعات أرباح مستحقة',
+                                'children' => [
+                                    [
+                                        'code' => '2121', 'name' => 'Mohamed Al-Mahfadi Dividends Payable USD', 'type' => $liab, 'normal' => $cr,
+                                        'currency' => 'USD',
+                                        'name_ar' => 'توزيعات أرباح مستحقة محمد المحفدي - دولار امريكي',
+                                        'description' => 'توزيعات أرباح مستحقة محمد المحفدي - دولار امريكي',
+                                    ],
+                                    [
+                                        'code' => '2122', 'name' => 'Ali Nabil Dividends Payable USD', 'type' => $liab, 'normal' => $cr,
+                                        'currency' => 'USD',
+                                        'name_ar' => 'توزيعات أرباح مستحقة علي نبيل - دولار امريكي',
+                                        'description' => 'توزيعات أرباح مستحقة علي نبيل - دولار امريكي',
+                                    ],
+                                ],
+                            ],
                         ],
                     ],
                 ],
@@ -284,6 +302,60 @@ class ChartOfAccountsSeeder extends Seeder
                                 'currency' => 'USD',
                                 'name_ar' => 'راس مال علي نبيل - دولار امريكي',
                                 'description' => 'راس مال علي نبيل - دولار امريكي',
+                            ],
+                        ],
+                    ],
+                    [
+                        'code' => '3200', 'name' => 'Capital Drawings', 'type' => $equity, 'normal' => $dr,
+                        'description' => 'مسحوبات رأس المال',
+                        'children' => [
+                            [
+                                'code' => '3211', 'name' => 'Mohamed Al-Mahfadi Capital Drawings USD', 'type' => $equity, 'normal' => $dr,
+                                'currency' => 'USD',
+                                'name_ar' => 'مسحوبات راس مال محمد المحفدي - دولار امريكي',
+                                'description' => 'مسحوبات راس مال محمد المحفدي - دولار امريكي',
+                            ],
+                            [
+                                'code' => '3212', 'name' => 'Ali Nabil Capital Drawings USD', 'type' => $equity, 'normal' => $dr,
+                                'currency' => 'USD',
+                                'name_ar' => 'مسحوبات راس مال علي نبيل - دولار امريكي',
+                                'description' => 'مسحوبات راس مال علي نبيل - دولار امريكي',
+                            ],
+                        ],
+                    ],
+                    [
+                        'code' => '3300', 'name' => 'Net Profit', 'type' => $equity, 'normal' => $cr,
+                        'description' => 'صافي الربح',
+                        'children' => [
+                            [
+                                'code' => '3311', 'name' => 'Mohamed Al-Mahfadi Net Profit USD', 'type' => $equity, 'normal' => $cr,
+                                'currency' => 'USD',
+                                'name_ar' => 'صافي ربح محمد المحفدي - دولار امريكي',
+                                'description' => 'صافي ربح محمد المحفدي - دولار امريكي',
+                            ],
+                            [
+                                'code' => '3312', 'name' => 'Ali Nabil Net Profit USD', 'type' => $equity, 'normal' => $cr,
+                                'currency' => 'USD',
+                                'name_ar' => 'صافي ربح علي نبيل - دولار امريكي',
+                                'description' => 'صافي ربح علي نبيل - دولار امريكي',
+                            ],
+                        ],
+                    ],
+                    [
+                        'code' => '3400', 'name' => 'Retained Earnings', 'type' => $equity, 'normal' => $cr,
+                        'description' => 'أرباح محتجزة / أرباح مرحلة',
+                        'children' => [
+                            [
+                                'code' => '3411', 'name' => 'Mohamed Al-Mahfadi Retained Earnings USD', 'type' => $equity, 'normal' => $cr,
+                                'currency' => 'USD',
+                                'name_ar' => 'أرباح محتجزة / أرباح مرحلة محمد المحفدي - دولار امريكي',
+                                'description' => 'أرباح محتجزة / أرباح مرحلة محمد المحفدي - دولار امريكي',
+                            ],
+                            [
+                                'code' => '3412', 'name' => 'Ali Nabil Retained Earnings USD', 'type' => $equity, 'normal' => $cr,
+                                'currency' => 'USD',
+                                'name_ar' => 'أرباح محتجزة / أرباح مرحلة علي نبيل - دولار امريكي',
+                                'description' => 'أرباح محتجزة / أرباح مرحلة علي نبيل - دولار امريكي',
                             ],
                         ],
                     ],
