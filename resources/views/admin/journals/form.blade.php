@@ -5,7 +5,6 @@
     $journalFormConfig = [
         'accounts' => $accountCurrencies,
         'baseCurrencyId' => (int) $currency->id,
-        'lookupUrl' => $lookupUrl,
         'initialDate' => old('entry_date', now()->toDateString()),
     ];
 @endphp
@@ -17,7 +16,7 @@
     <div class="mb-6 grid gap-4 sm:grid-cols-2">
         <div>
             <label class="label-public">{{ __('Date') }}</label>
-            <input class="input-public" type="date" name="entry_date" x-model="entryDate" @change="refreshRates()" required>
+            <input class="input-public" type="date" name="entry_date" x-model="entryDate" required>
         </div>
         <div>
             <label class="label-public">{{ __('Description') }}</label>
@@ -94,45 +93,19 @@ function journalForm(config) {
 
     return {
         accounts: config.accounts,
-        lookupUrl: config.lookupUrl,
         baseCurrencyId: config.baseCurrencyId,
         entryDate: config.initialDate,
         lines: [emptyLine(), emptyLine()],
         syncing: false,
         addLine() { this.lines.push(emptyLine()); },
         removeLine(index) { if (this.lines.length > 2) this.lines.splice(index, 1); },
-        async onAccountChange(line) {
+        onAccountChange(line) {
             const meta = this.accounts[line.account_id];
             if (!meta) return;
             line.currency_id = meta.currency_id;
             line.currency_code = meta.currency_code;
-            await this.fillRate(line);
+            line.exchange_rate = 1;
             this.syncCounterpart(line);
-        },
-        async refreshRates() {
-            for (const line of this.lines) {
-                if (line.account_id) await this.fillRate(line);
-            }
-            const source = this.lines.find((line) => Number(line.debit || 0) > 0 || Number(line.credit || 0) > 0);
-            if (source) this.syncCounterpart(source);
-        },
-        async fillRate(line) {
-            if (!line.currency_id || Number(line.currency_id) === Number(this.baseCurrencyId)) {
-                line.exchange_rate = 1;
-                return;
-            }
-            try {
-                const url = new URL(this.lookupUrl, window.location.origin);
-                url.searchParams.set('from', line.currency_id);
-                url.searchParams.set('to', this.baseCurrencyId);
-                url.searchParams.set('date', this.entryDate);
-                const response = await fetch(url.toString(), {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                if (!response.ok) return;
-                const data = await response.json();
-                if (data.rate) line.exchange_rate = data.rate;
-            } catch (e) {}
         },
         onAmountInput(line, side) {
             line.amountManual = true;
@@ -147,34 +120,24 @@ function journalForm(config) {
                 : Number(sourceLine.credit || 0);
             if (amount <= 0) return;
 
-            const sourceRate = Number(sourceLine.exchange_rate || 0);
-            if (sourceRate <= 0) return;
-
-            // Simple 2-line journals: always fill the other side (same or different currency).
             const others = this.lines.filter((line) => line !== sourceLine);
             if (others.length !== 1) return;
 
             const other = others[0];
-            const otherRate = Number(other.exchange_rate || 0);
-            if (otherRate <= 0) return;
             if (other.amountManual && (Number(other.debit || 0) > 0 || Number(other.credit || 0) > 0)) {
                 return;
             }
 
-            const sameCurrency = Number(other.currency_id) === Number(sourceLine.currency_id);
-            const otherAmount = sameCurrency
-                ? amount
-                : Math.round((amount * sourceRate / otherRate) * 100) / 100;
             const sourceIsDebit = Number(sourceLine.debit || 0) > 0;
 
             this.syncing = true;
             try {
                 if (sourceIsDebit) {
                     other.debit = 0;
-                    other.credit = otherAmount;
+                    other.credit = amount;
                 } else {
                     other.credit = 0;
-                    other.debit = otherAmount;
+                    other.debit = amount;
                 }
                 other.amountManual = false;
             } finally {
@@ -182,17 +145,16 @@ function journalForm(config) {
             }
         },
         baseAmount(line) {
-            const rate = Number(line.exchange_rate || 0);
             const debit = Number(line.debit || 0);
             const credit = Number(line.credit || 0);
             const amount = debit > 0 ? debit : credit;
-            return (amount * rate).toFixed(2);
+            return amount.toFixed(2);
         },
         totalDebitBase() {
-            return this.lines.reduce((sum, line) => sum + (Number(line.debit || 0) * Number(line.exchange_rate || 0)), 0).toFixed(2);
+            return this.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0).toFixed(2);
         },
         totalCreditBase() {
-            return this.lines.reduce((sum, line) => sum + (Number(line.credit || 0) * Number(line.exchange_rate || 0)), 0).toFixed(2);
+            return this.lines.reduce((sum, line) => sum + Number(line.credit || 0), 0).toFixed(2);
         },
     };
 }

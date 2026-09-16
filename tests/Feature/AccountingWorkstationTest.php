@@ -41,6 +41,10 @@ class AccountingWorkstationTest extends TestCase
             ->get(route('admin.accounts.index'))
             ->assertOk()
             ->assertSee('دليل الحسابات', false)
+            ->assertSee('ابحث في الحسابات...', false)
+            ->assertSee('حساب جديد', false)
+            ->assertSee('id="btnOpenAccount"', false)
+            ->assertSee('id="accountModal"', false)
             ->assertSee('111101', false)
             ->assertSee('نوع الحساب', false)
             ->assertSee('الكل', false)
@@ -69,6 +73,89 @@ class AccountingWorkstationTest extends TestCase
             ->assertSee('أرباح محتجزة / أرباح مرحلة علي نبيل - دولار امريكي', false)
             ->assertSee('توزيعات أرباح مستحقة محمد المحفدي - دولار امريكي', false)
             ->assertSee('توزيعات أرباح مستحقة علي نبيل - دولار امريكي', false);
+    }
+
+    public function test_admin_can_create_leaf_account_under_control_parent(): void
+    {
+        $parent = Account::query()->where('account_code', '1111')->firstOrFail();
+        $usd = \App\Models\Currency::query()->where('code', 'USD')->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.create'))
+            ->assertRedirect(route('admin.accounts.index', ['new' => 1]));
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.index', ['new' => 1]))
+            ->assertOk()
+            ->assertSee('id="accountModal" class="is-open"', false)
+            ->assertSee('حساب جديد', false);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.accounts.store'), [
+                'account_code' => '111199',
+                'account_name' => 'Petty Cash USD',
+                'account_name_ar' => 'صندوق نثرية دولار',
+                'account_type' => AccountType::Asset->value,
+                'parent_id' => $parent->id,
+                'currency_id' => $usd->id,
+                'is_cash_account' => '1',
+                'is_bank_account' => '0',
+            ])
+            ->assertRedirect(route('admin.accounts.index'));
+
+        $account = Account::query()->where('account_code', '111199')->firstOrFail();
+        $this->assertSame($parent->id, $account->parent_id);
+        $this->assertTrue($account->allow_posting);
+        $this->assertFalse($account->is_control_account);
+        $this->assertTrue($account->is_cash_account);
+        $this->assertSame(NormalBalance::Debit, $account->normal_balance);
+        $this->assertSame($parent->account_level + 1, $account->account_level);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.index'))
+            ->assertOk()
+            ->assertSee('111199', false)
+            ->assertSee('صندوق نثرية دولار', false);
+    }
+
+    public function test_duplicate_account_code_is_rejected(): void
+    {
+        $this->actingAs($this->admin)
+            ->from(route('admin.accounts.index', ['new' => 1]))
+            ->post(route('admin.accounts.store'), [
+                'account_code' => '111101',
+                'account_name' => 'Duplicate',
+                'account_type' => AccountType::Asset->value,
+            ])
+            ->assertRedirect(route('admin.accounts.index', ['new' => 1]))
+            ->assertSessionHasErrors('account_code');
+    }
+
+    public function test_user_with_accounts_view_only_cannot_create_account(): void
+    {
+        $accountant = User::factory()->create([
+            'email' => 'accountant.view@qcoresys.test',
+            'is_active' => true,
+        ]);
+        $accountant->assignRole('ACCOUNTANT');
+
+        $this->actingAs($accountant)
+            ->get(route('admin.accounts.index'))
+            ->assertOk()
+            ->assertDontSee('id="btnOpenAccount"', false)
+            ->assertDontSee('id="accountModal"', false);
+
+        $this->actingAs($accountant)
+            ->get(route('admin.accounts.create'))
+            ->assertForbidden();
+
+        $this->actingAs($accountant)
+            ->post(route('admin.accounts.store'), [
+                'account_code' => '111198',
+                'account_name' => 'Forbidden account',
+                'account_type' => AccountType::Asset->value,
+            ])
+            ->assertForbidden();
     }
 
     public function test_partner_leaf_accounts_are_postable_usd(): void

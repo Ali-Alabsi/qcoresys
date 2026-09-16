@@ -55,14 +55,8 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::post('payments/{payment}/post', [PlatformController::class, 'paymentPost'])->middleware('permission:payments.post')->name('payments.post');
 
         Route::get('accounts', [PlatformController::class, 'accountsIndex'])->middleware('permission:accounts.view')->name('accounts.index');
-
-        Route::get('exchange-rates', [PlatformController::class, 'exchangeRatesIndex'])->middleware('permission:exchange_rates.view')->name('exchange-rates.index');
-        Route::get('exchange-rates/create', [PlatformController::class, 'exchangeRatesCreate'])->middleware('permission:exchange_rates.create')->name('exchange-rates.create');
-        Route::get('exchange-rates/lookup', [PlatformController::class, 'exchangeRatesLookup'])->middleware('permission:journals.create')->name('exchange-rates.lookup');
-        Route::post('exchange-rates/annual-closing', [PlatformController::class, 'exchangeRatesAnnualClosing'])->middleware('permission:journals.create')->name('exchange-rates.annual-closing');
-        Route::post('exchange-rates', [PlatformController::class, 'exchangeRatesStore'])->middleware('permission:exchange_rates.create')->name('exchange-rates.store');
-        Route::get('exchange-rates/{exchangeRate}/edit', [PlatformController::class, 'exchangeRatesEdit'])->middleware('permission:exchange_rates.update')->name('exchange-rates.edit');
-        Route::put('exchange-rates/{exchangeRate}', [PlatformController::class, 'exchangeRatesUpdate'])->middleware('permission:exchange_rates.update')->name('exchange-rates.update');
+        Route::get('accounts/create', [PlatformController::class, 'accountsCreate'])->middleware('permission:accounts.create')->name('accounts.create');
+        Route::post('accounts', [PlatformController::class, 'accountsStore'])->middleware('permission:accounts.create')->name('accounts.store');
 
         Route::get('journals', [PlatformController::class, 'journalsIndex'])->middleware('permission:journals.view')->name('journals.index');
         Route::get('journals/create', [PlatformController::class, 'journalsCreate'])->middleware('permission:journals.create')->name('journals.create');

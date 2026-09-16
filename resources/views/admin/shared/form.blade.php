@@ -20,7 +20,7 @@
                 @else
                     <label class="label-public" for="{{ $name }}">{{ $field['label'] }}</label>
                     @if($type === 'select')
-                        <select class="input-public" id="{{ $name }}" name="{{ $name }}" required>
+                        <select class="input-public" id="{{ $name }}" name="{{ $name }}" @if(($field['required'] ?? true) !== false) required @endif>
                             <option value="">{{ __('Select') }}</option>
                             @foreach($field['options'] as $optionValue => $optionLabel)<option value="{{ $optionValue }}" @selected((string)$value === (string)$optionValue)>{{ $optionLabel }}</option>@endforeach
                         </select>

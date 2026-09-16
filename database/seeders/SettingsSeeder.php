@@ -13,7 +13,7 @@ class SettingsSeeder extends Seeder
     public function run(): void
     {
         $accounts = Account::query()
-            ->whereIn('account_code', ['111101', '111102', '1121', '2111', '4112', '4111', '4199', '5111', '5199'])
+            ->whereIn('account_code', ['111101', '111102', '1121', '2111', '4112', '4111', '5111'])
             ->pluck('id', 'account_code');
 
         $settings = [
@@ -87,22 +87,6 @@ class SettingsSeeder extends Seeder
                 'type' => SettingType::Integer,
                 'group' => 'accounting',
                 'description' => 'Default expense account (Hosting USD)',
-                'is_public' => false,
-            ],
-            [
-                'key' => 'account_fx_gain',
-                'value' => (string) ($accounts['4199'] ?? ''),
-                'type' => SettingType::Integer,
-                'group' => 'accounting',
-                'description' => 'Foreign exchange gain account (USD)',
-                'is_public' => false,
-            ],
-            [
-                'key' => 'account_fx_loss',
-                'value' => (string) ($accounts['5199'] ?? ''),
-                'type' => SettingType::Integer,
-                'group' => 'accounting',
-                'description' => 'Foreign exchange loss account (USD)',
                 'is_public' => false,
             ],
         ];

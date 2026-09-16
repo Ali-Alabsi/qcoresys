@@ -28,16 +28,6 @@ class Currency extends Model
         ];
     }
 
-    public function exchangeRatesFrom(): HasMany
-    {
-        return $this->hasMany(ExchangeRate::class, 'from_currency_id');
-    }
-
-    public function exchangeRatesTo(): HasMany
-    {
-        return $this->hasMany(ExchangeRate::class, 'to_currency_id');
-    }
-
     public function customers(): HasMany
     {
         return $this->hasMany(Customer::class, 'default_currency_id');

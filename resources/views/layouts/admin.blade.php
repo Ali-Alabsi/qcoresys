@@ -26,7 +26,6 @@
                     ['payments.view', 'admin.payments.index', __('Payments'), ['admin.payments.*']],
                     ['accounts.view', 'admin.accounts.index', __('Accounts'), ['admin.accounts.*']],
                     ['journals.view', 'admin.journals.index', __('Financial operations'), ['admin.journals.index', 'admin.journals.show', 'admin.journals.create']],
-                    ['exchange_rates.view', 'admin.exchange-rates.index', __('Exchange rates'), ['admin.exchange-rates.*']],
                     ['services_catalog.view', 'admin.services.index', __('Services'), ['admin.services.*']],
                     ['portfolio.view', 'admin.portfolio-projects.index', __('Portfolio'), ['admin.portfolio-projects.*']],
                     ['settings.view', 'admin.settings.edit', __('Settings'), ['admin.settings.*']],

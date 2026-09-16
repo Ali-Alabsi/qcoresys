@@ -21,7 +21,6 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             RolePermissionSeeder::class,
             ChartOfAccountsSeeder::class,
-            ExchangeRateSeeder::class,
             ServiceCategorySeeder::class,
             ServiceSeeder::class,
             TechnologySeeder::class,

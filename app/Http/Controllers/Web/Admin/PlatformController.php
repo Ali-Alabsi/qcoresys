@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Web\Admin;
 
+use App\Enums\AccountType;
 use App\Enums\BillingType;
 use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
-use App\Enums\ExchangeRateType;
 use App\Enums\PaymentMethod;
 use App\Enums\PricingType;
 use App\Enums\RequestPriority;
@@ -18,7 +18,6 @@ use App\Models\Attachment;
 use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\CustomerRequest;
-use App\Models\ExchangeRate;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Faq;
@@ -35,10 +34,9 @@ use App\Models\ServiceProcessStep;
 use App\Models\Setting;
 use App\Models\Technology;
 use App\Services\AccountBalanceService;
-use App\Services\AnnualFxClosingService;
+use App\Services\ChartOfAccountsService;
 use App\Services\CustomerRequestService;
 use App\Services\CustomerService;
-use App\Services\ExchangeRateService;
 use App\Services\ExpenseService;
 use App\Services\InvoiceService;
 use App\Services\JournalEntryService;
@@ -341,9 +339,55 @@ class PlatformController extends Controller
 
     public function accountsIndex(AccountBalanceService $balances): View
     {
+        $parentAccounts = Account::query()
+            ->where('is_control_account', true)
+            ->active()
+            ->orderBy('account_code')
+            ->get()
+            ->mapWithKeys(fn (Account $account) => [
+                $account->id => $account->account_code.' — '.$account->localized_name,
+            ]);
+
+        $currencies = Currency::query()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->pluck('code', 'id');
+
+        $accountTypes = collect(AccountType::cases())
+            ->mapWithKeys(fn (AccountType $type) => [$type->value => $type->label()])
+            ->all();
+
         return view('admin.accounting.accounts', [
             'accounts' => $this->accountingAccountsPayload($balances),
+            'parentAccounts' => $parentAccounts,
+            'currencies' => $currencies,
+            'accountTypes' => $accountTypes,
         ]);
+    }
+
+    public function accountsCreate(): RedirectResponse
+    {
+        return redirect()->route('admin.accounts.index', ['new' => 1]);
+    }
+
+    public function accountsStore(Request $request, ChartOfAccountsService $service): RedirectResponse
+    {
+        try {
+            $data = $this->validateAccount($request);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e->redirectTo(route('admin.accounts.index', ['new' => 1]));
+        }
+
+        try {
+            $service->create($data, $request->user()->id);
+        } catch (DomainException $e) {
+            return redirect()
+                ->route('admin.accounts.index', ['new' => 1])
+                ->withInput()
+                ->withErrors(['account_type' => $e->getMessage()]);
+        }
+
+        return redirect()->route('admin.accounts.index')->with('status', __('Account created.'));
     }
 
     /**
@@ -372,102 +416,6 @@ class PlatformController extends Controller
             })
             ->values()
             ->all();
-    }
-
-    public function exchangeRatesIndex(): View
-    {
-        $rates = ExchangeRate::query()
-            ->with(['fromCurrency', 'toCurrency'])
-            ->latest('rate_date')
-            ->latest('id')
-            ->paginate(30);
-
-        return view('admin.exchange-rates.index', [
-            'rates' => $rates,
-            'currentYear' => (int) now()->year,
-        ]);
-    }
-
-    public function exchangeRatesCreate(): View
-    {
-        return $this->formView(__('New exchange rate'), route('admin.exchange-rates.store'), $this->exchangeRateFields());
-    }
-
-    public function exchangeRatesStore(Request $request, ExchangeRateService $service): RedirectResponse
-    {
-        $data = $this->validateExchangeRate($request);
-
-        try {
-            $service->upsertDailyRate($data);
-        } catch (DomainException $e) {
-            return back()->withInput()->withErrors(['rate' => $e->getMessage()]);
-        }
-
-        return redirect()->route('admin.exchange-rates.index')->with('status', __('Exchange rate saved.'));
-    }
-
-    public function exchangeRatesEdit(ExchangeRate $exchangeRate): View
-    {
-        return $this->formView(
-            __('Edit exchange rate'),
-            route('admin.exchange-rates.update', $exchangeRate),
-            $this->exchangeRateFields(),
-            $exchangeRate,
-            'PUT'
-        );
-    }
-
-    public function exchangeRatesUpdate(Request $request, ExchangeRate $exchangeRate, ExchangeRateService $service): RedirectResponse
-    {
-        $data = $this->validateExchangeRate($request);
-
-        try {
-            if (
-                (int) $data['from_currency_id'] !== (int) $exchangeRate->from_currency_id
-                || (int) $data['to_currency_id'] !== (int) $exchangeRate->to_currency_id
-                || $data['rate_date'] !== $exchangeRate->rate_date->toDateString()
-            ) {
-                $exchangeRate->delete();
-            }
-            $service->upsertDailyRate($data);
-        } catch (DomainException $e) {
-            return back()->withInput()->withErrors(['rate' => $e->getMessage()]);
-        }
-
-        return redirect()->route('admin.exchange-rates.index')->with('status', __('Exchange rate saved.'));
-    }
-
-    public function exchangeRatesLookup(Request $request, ExchangeRateService $service): JsonResponse
-    {
-        $data = $request->validate([
-            'from' => ['required', 'integer', 'exists:currencies,id'],
-            'to' => ['required', 'integer', 'exists:currencies,id'],
-            'date' => ['nullable', 'date'],
-        ]);
-
-        try {
-            $rate = $service->rate((int) $data['from'], (int) $data['to'], $data['date'] ?? null);
-        } catch (DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        return response()->json(['rate' => $rate]);
-    }
-
-    public function exchangeRatesAnnualClosing(Request $request, AnnualFxClosingService $service): RedirectResponse
-    {
-        $data = $request->validate([
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-        ]);
-
-        try {
-            $entry = $service->createDraft((int) $data['year'], $request->user()->id);
-        } catch (DomainException $e) {
-            return back()->withErrors(['year' => $e->getMessage()]);
-        }
-
-        return redirect()->route('admin.journals.show', $entry)
-            ->with('status', __('Annual FX closing draft created.'));
     }
 
     public function expensesIndex(): View
@@ -553,7 +501,6 @@ class PlatformController extends Controller
     public function journalsStore(
         Request $request,
         JournalEntryService $service,
-        ExchangeRateService $rates,
         AccountBalanceService $balances
     ): JsonResponse|RedirectResponse {
         $wantsJson = $request->expectsJson() || $request->ajax();
@@ -609,20 +556,11 @@ class PlatformController extends Controller
             }
 
             $currencyId = $account->currency_id ?? $base->id;
-            try {
-                $rate = $rates->rateToBase((int) $currencyId, $data['entry_date']);
-            } catch (DomainException $e) {
-                if ($wantsJson) {
-                    return response()->json(['message' => $e->getMessage()], 422);
-                }
-
-                return back()->withInput()->withErrors(['lines' => $e->getMessage()]);
-            }
 
             $lines[] = [
                 'account_id' => $account->id,
                 'currency_id' => $currencyId,
-                'exchange_rate' => $rate,
+                'exchange_rate' => 1,
                 'description' => $line['description'] ?? null,
                 'debit' => $debit,
                 'credit' => $credit,
@@ -1058,6 +996,31 @@ class PlatformController extends Controller
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateAccount(Request $request): array
+    {
+        $data = $request->validate([
+            'account_code' => ['required', 'string', 'max:50', 'unique:accounts,account_code'],
+            'account_name' => ['required', 'string', 'max:255'],
+            'account_name_ar' => ['nullable', 'string', 'max:255'],
+            'account_type' => ['required', Rule::enum(AccountType::class)],
+            'parent_id' => ['nullable', 'exists:accounts,id'],
+            'currency_id' => ['nullable', 'exists:currencies,id'],
+            'is_cash_account' => ['nullable', 'boolean'],
+            'is_bank_account' => ['nullable', 'boolean'],
+        ]);
+
+        $data['is_cash_account'] = $request->boolean('is_cash_account');
+        $data['is_bank_account'] = $request->boolean('is_bank_account');
+        $data['parent_id'] = $data['parent_id'] ?? null;
+        $data['currency_id'] = $data['currency_id'] ?? null;
+        $data['account_name_ar'] = $data['account_name_ar'] ?? null;
+
+        return $data;
+    }
+
     private function validateCustomer(Request $request): array
     {
         return $request->validate([
@@ -1120,44 +1083,6 @@ class PlatformController extends Controller
             'sort_order' => ['label' => __('Sort order'), 'type' => 'number', 'value' => 0],
             'is_active' => ['label' => __('Active'), 'type' => 'checkbox'], 'is_featured' => ['label' => __('Featured'), 'type' => 'checkbox'],
         ];
-    }
-
-    private function exchangeRateFields(): array
-    {
-        $currencies = Currency::query()
-            ->active()
-            ->whereIn('code', ['USD', 'SAR', 'YER'])
-            ->orderBy('code')
-            ->pluck('code', 'id');
-
-        return [
-            'from_currency_id' => $this->selectField(__('From currency'), $currencies),
-            'to_currency_id' => $this->selectField(__('To currency'), $currencies),
-            'rate' => ['label' => __('Rate'), 'type' => 'number', 'step' => '0.0000000001'],
-            'rate_date' => ['label' => __('Rate date'), 'type' => 'date', 'value' => now()->toDateString()],
-            'rate_type' => $this->selectField(__('Rate type'), collect(ExchangeRateType::cases())->mapWithKeys(
-                fn (ExchangeRateType $type) => [$type->value => $type->value]
-            )),
-            'source' => ['label' => __('Source'), 'value' => 'manual'],
-            'is_active' => ['label' => __('Active'), 'type' => 'checkbox', 'value' => 1],
-        ];
-    }
-
-    private function validateExchangeRate(Request $request): array
-    {
-        $data = $request->validate([
-            'from_currency_id' => ['required', 'integer', 'exists:currencies,id', 'different:to_currency_id'],
-            'to_currency_id' => ['required', 'integer', 'exists:currencies,id'],
-            'rate' => ['required', 'numeric', 'gt:0'],
-            'rate_date' => ['required', 'date'],
-            'rate_type' => ['required', Rule::enum(ExchangeRateType::class)],
-            'source' => ['nullable', 'string', 'max:100'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
-
-        $data['is_active'] = $request->boolean('is_active');
-
-        return $data;
     }
 
     private function validatePortfolio(Request $request): array

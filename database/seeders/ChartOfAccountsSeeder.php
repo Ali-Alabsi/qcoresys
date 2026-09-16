@@ -25,7 +25,7 @@ class ChartOfAccountsSeeder extends Seeder
         '111201', '111202', '111203', '111204',
         '4111', '4112', '4113', '4114', '4115',
         '5111', '5112', '5113', '5114', '5115', '5116',
-        '4199', '5199', '2111', '2121', '2122',
+        '2111', '2121', '2122',
     ];
 
     public function run(): void
@@ -400,12 +400,6 @@ class ChartOfAccountsSeeder extends Seeder
                                 'name_ar' => 'إيرادات برمجيات وتطبيقات - دولار امريكي',
                                 'description' => 'إيرادات برمجيات وتطبيقات - دولار امريكي',
                             ],
-                            [
-                                'code' => '4199', 'name' => 'Foreign Exchange Gain USD', 'type' => $rev, 'normal' => $cr,
-                                'currency' => 'USD', 'active' => false,
-                                'name_ar' => 'إيراد فروقات عملة',
-                                'description' => 'إيراد فروقات عملة (محفوظ للإعدادات)',
-                            ],
                         ],
                     ],
                 ],
@@ -453,12 +447,6 @@ class ChartOfAccountsSeeder extends Seeder
                                 'currency' => 'USD',
                                 'name_ar' => 'إنترنت واتصالات وكهرباء - دولار امريكي',
                                 'description' => 'إنترنت واتصالات وكهرباء - دولار امريكي',
-                            ],
-                            [
-                                'code' => '5199', 'name' => 'Foreign Exchange Loss USD', 'type' => $exp, 'normal' => $dr,
-                                'currency' => 'USD', 'active' => false,
-                                'name_ar' => 'مصروف فروقات عملة',
-                                'description' => 'مصروف فروقات عملة (محفوظ للإعدادات)',
                             ],
                         ],
                     ],

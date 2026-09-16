@@ -25,7 +25,6 @@ class RolePermissionSeeder extends Seeder
         'journals' => ['view', 'create', 'update', 'delete', 'post', 'reverse'],
         'vendors' => ['view', 'create', 'update', 'delete'],
         'accounts' => ['view', 'create', 'update', 'delete'],
-        'exchange_rates' => ['view', 'create', 'update', 'delete'],
         'employees' => ['view', 'create', 'update', 'delete'],
         'users' => ['view', 'create', 'update', 'delete'],
         'settings' => ['view', 'update'],
@@ -97,7 +96,7 @@ class RolePermissionSeeder extends Seeder
                     'payments.view', 'payments.post',
                     'expenses.view', 'expenses.approve', 'expenses.post',
                     'journals.view', 'journals.post',
-                    'vendors.view', 'accounts.view', 'exchange_rates.view', 'employees.view', 'users.view',
+                    'vendors.view', 'accounts.view', 'employees.view', 'users.view',
                     'settings.view', 'reports.view',
                 ]),
             ],
@@ -178,7 +177,6 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => $this->codes($permissions, [
                     'customers.view', 'vendors.view', 'vendors.create', 'vendors.update',
                     'accounts.view', 'accounts.create', 'accounts.update',
-                    'exchange_rates.view', 'exchange_rates.create', 'exchange_rates.update', 'exchange_rates.delete',
                     'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete', 'invoices.approve', 'invoices.post',
                     'payments.view', 'payments.create', 'payments.update', 'payments.delete', 'payments.post',
                     'expenses.view', 'expenses.create', 'expenses.update', 'expenses.delete', 'expenses.approve', 'expenses.post',
@@ -192,7 +190,6 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => $this->codes($permissions, [
                     'customers.view', 'vendors.view',
                     'accounts.view',
-                    'exchange_rates.view', 'exchange_rates.create', 'exchange_rates.update',
                     'invoices.view', 'invoices.create', 'invoices.update', 'invoices.approve', 'invoices.post',
                     'payments.view', 'payments.create', 'payments.update', 'payments.post',
                     'expenses.view', 'expenses.create', 'expenses.update', 'expenses.approve', 'expenses.post',
