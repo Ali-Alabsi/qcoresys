@@ -1,17 +1,20 @@
 @extends('layouts.admin')
 @section('title', $title)
 @section('content')
-<div class="mb-6 flex items-center justify-between gap-4">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <h1 class="text-2xl font-bold">{{ $title }}</h1>
     @php
         $routeModule = str_replace('admin.', '', $routeBase);
         $permissionModule = ['portfolio-projects' => 'portfolio', 'services' => 'services_catalog'][$routeModule] ?? str_replace('-', '_', $routeModule);
     @endphp
-    @if(Route::has($routeBase.'.create'))
-        @if(auth()->user()->hasPermission($permissionModule.'.create'))
-            <a class="btn-primary !px-4 !py-2" href="{{ route($routeBase.'.create') }}">{{ __('Create') }}</a>
+    <div class="flex flex-wrap items-center gap-3">
+        @include('admin.shared.per-page', ['paginator' => $records])
+        @if(Route::has($routeBase.'.create'))
+            @if(auth()->user()->hasPermission($permissionModule.'.create'))
+                <a class="btn-primary !px-4 !py-2" href="{{ route($routeBase.'.create') }}">{{ __('Create') }}</a>
+            @endif
         @endif
-    @endif
+    </div>
 </div>
 <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
     <table class="min-w-full text-sm">
@@ -68,5 +71,5 @@
         </tbody>
     </table>
 </div>
-<div class="mt-5">{{ $records->links() }}</div>
+<div class="mt-5">@include('admin.shared.pagination', ['paginator' => $records])</div>
 @endsection

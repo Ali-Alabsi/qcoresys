@@ -57,6 +57,9 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::get('accounts', [PlatformController::class, 'accountsIndex'])->middleware('permission:accounts.view')->name('accounts.index');
         Route::get('accounts/create', [PlatformController::class, 'accountsCreate'])->middleware('permission:accounts.create')->name('accounts.create');
         Route::post('accounts', [PlatformController::class, 'accountsStore'])->middleware('permission:accounts.create')->name('accounts.store');
+        Route::get('accounts/{account}/ledger', [PlatformController::class, 'accountsLedger'])->middleware('permission:accounts.view')->name('accounts.ledger');
+        Route::get('accounts/{account}/ledger/pdf', [PlatformController::class, 'accountsLedgerPdf'])->middleware('permission:accounts.view')->name('accounts.ledger.pdf');
+        Route::get('accounts/{account}/ledger/excel', [PlatformController::class, 'accountsLedgerExcel'])->middleware('permission:accounts.view')->name('accounts.ledger.excel');
 
         Route::get('journals', [PlatformController::class, 'journalsIndex'])->middleware('permission:journals.view')->name('journals.index');
         Route::get('journals/create', [PlatformController::class, 'journalsCreate'])->middleware('permission:journals.create')->name('journals.create');

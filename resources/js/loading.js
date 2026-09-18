@@ -82,6 +82,16 @@ function isModifiedClick(event) {
     return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
 }
 
+function isDownloadNavigation(url) {
+    const path = url.pathname.toLowerCase();
+    if (/(?:^|\/)(?:pdf|excel|export|download)(?:\/|$)/.test(path) || /\.(?:pdf|xls|xlsx|csv|zip|docx?)$/i.test(path)) {
+        return true;
+    }
+
+    const dispositionHint = (url.searchParams.get('download') || url.searchParams.get('export') || '').toLowerCase();
+    return dispositionHint === '1' || dispositionHint === 'true';
+}
+
 function shouldShowForLink(anchor, event) {
     if (!anchor || hasNoLoadingFlag(anchor)) {
         return false;
@@ -110,6 +120,11 @@ function shouldShowForLink(anchor, event) {
     }
 
     if (url.origin !== window.location.origin) {
+        return false;
+    }
+
+    // File downloads keep the current page mounted, so the overlay would stick.
+    if (isDownloadNavigation(url)) {
         return false;
     }
 

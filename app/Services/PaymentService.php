@@ -22,7 +22,7 @@ class PaymentService
     {
         return DB::transaction(function () use ($data, $createdBy) {
             if (empty($data['invoice_id'])) {
-                throw new DomainException('Payment must be linked to an invoice.');
+                throw new DomainException(__('Payment must be linked to an invoice.'));
             }
 
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($data['invoice_id']);
@@ -32,15 +32,15 @@ class PaymentService
             $amount = Money::round($data['amount'] ?? 0);
 
             if (! Money::isPositive($amount)) {
-                throw new DomainException('Payment amount must be greater than zero.');
+                throw new DomainException(__('Payment amount must be greater than zero.'));
             }
 
             if ($amount > (float) $invoice->remaining_amount) {
-                throw new DomainException('Payment amount cannot exceed the invoice remaining balance.');
+                throw new DomainException(__('Payment amount cannot exceed the invoice remaining balance.'));
             }
 
             if (isset($data['customer_id']) && (int) $data['customer_id'] !== $invoice->customer_id) {
-                throw new DomainException('Payment customer does not match the invoice customer.');
+                throw new DomainException(__('Payment customer does not match the invoice customer.'));
             }
 
             $payment = Payment::create([
@@ -65,11 +65,11 @@ class PaymentService
             $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
 
             if ($payment->status === PaymentStatus::Posted) {
-                throw new DomainException('Payment is already posted.');
+                throw new DomainException(__('Payment is already posted.'));
             }
 
             if ($payment->journal_entry_id !== null) {
-                throw new DomainException('Payment already has an associated journal entry.');
+                throw new DomainException(__('Payment already has an associated journal entry.'));
             }
 
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($payment->invoice_id);
@@ -78,7 +78,7 @@ class PaymentService
             $amount = (float) $payment->amount;
 
             if ($amount > (float) $invoice->remaining_amount) {
-                throw new DomainException('Payment amount cannot exceed the invoice remaining balance.');
+                throw new DomainException(__('Payment amount cannot exceed the invoice remaining balance.'));
             }
 
             $entry = $this->accountingService->postPayment($payment, $postedBy);
@@ -115,11 +115,11 @@ class PaymentService
             InvoiceStatus::PartiallyPaid,
             InvoiceStatus::Overdue,
         ], true)) {
-            throw new DomainException('Payments can only be applied to posted or partially paid invoices.');
+            throw new DomainException(__('Payments can only be applied to posted or partially paid invoices.'));
         }
 
         if ((float) $invoice->remaining_amount <= 0) {
-            throw new DomainException('Invoice has no remaining balance.');
+            throw new DomainException(__('Invoice has no remaining balance.'));
         }
     }
 }

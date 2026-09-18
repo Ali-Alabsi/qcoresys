@@ -6,6 +6,7 @@ use App\Enums\AccountType;
 use App\Enums\BillingType;
 use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
+use App\Enums\InvoiceStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PricingType;
 use App\Enums\RequestPriority;
@@ -37,6 +38,7 @@ use App\Services\AccountBalanceService;
 use App\Services\ChartOfAccountsService;
 use App\Services\CustomerRequestService;
 use App\Services\CustomerService;
+use App\Services\DocumentPdfService;
 use App\Services\ExpenseService;
 use App\Services\InvoiceService;
 use App\Services\JournalEntryService;
@@ -44,9 +46,11 @@ use App\Services\PaymentService;
 use App\Services\Public\CompanySettingsService;
 use App\Services\Public\PublicCatalogService;
 use App\Services\QuotationService;
+use App\Services\ReportingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -68,9 +72,9 @@ class PlatformController extends Controller
         ]]);
     }
 
-    public function customersIndex(): View
+    public function customersIndex(Request $request): View
     {
-        return $this->indexView(__('Customers'), Customer::latest()->paginate(20), [
+        return $this->indexView(__('Customers'), Customer::latest()->paginate($this->perPage($request))->withQueryString(), [
             'customer_code' => __('Code'), 'name' => __('Name'), 'email' => __('Email'), 'status' => __('Status'),
         ], 'admin.customers');
     }
@@ -88,7 +92,16 @@ class PlatformController extends Controller
 
     public function customersShow(Customer $customer, AccountBalanceService $balances): View
     {
-        $customer->load(['requests', 'quotations', 'invoices', 'account']);
+        $customer->load(['account']);
+
+        $invoices = $customer->invoices()
+            ->latest('invoice_date')
+            ->latest('id')
+            ->get();
+
+        $totalInvoiced = (float) $invoices->sum('total_amount');
+        $totalPaid = (float) $invoices->sum('paid_amount');
+        $totalOutstanding = (float) $invoices->sum('remaining_amount');
 
         if ($customer->account) {
             $balance = $balances->balanceAsOf($customer->account, now()->toDateString());
@@ -98,10 +111,14 @@ class PlatformController extends Controller
             );
         }
 
-        return view('admin.shared.show', ['title' => $customer->name, 'record' => $customer, 'fields' => [
-            'customer_code', 'customer_type', 'email', 'phone', 'city', 'status',
-            'account.account_code', 'receivable_balance', 'notes',
-        ]]);
+        return view('admin.customers.show', [
+            'title' => $customer->name,
+            'customer' => $customer,
+            'invoices' => $invoices,
+            'totalInvoiced' => $totalInvoiced,
+            'totalPaid' => $totalPaid,
+            'totalOutstanding' => $totalOutstanding,
+        ]);
     }
 
     public function customersEdit(Customer $customer): View
@@ -115,9 +132,9 @@ class PlatformController extends Controller
         return redirect()->route('admin.customers.show', $customer)->with('status', __('Customer updated.'));
     }
 
-    public function requestsIndex(): View
+    public function requestsIndex(Request $request): View
     {
-        return $this->indexView(__('Customer requests'), CustomerRequest::with('customer')->latest()->paginate(20), [
+        return $this->indexView(__('Customer requests'), CustomerRequest::with('customer')->latest()->paginate($this->perPage($request))->withQueryString(), [
             'request_no' => __('Number'), 'customer.name' => __('Customer'), 'subject' => __('Subject'), 'status' => __('Status'),
         ], 'admin.customer-requests');
     }
@@ -152,9 +169,9 @@ class PlatformController extends Controller
         return redirect()->route('admin.customer-requests.show', $customerRequest)->with('status', __('Request updated.'));
     }
 
-    public function quotationsIndex(): View
+    public function quotationsIndex(Request $request): View
     {
-        return $this->indexView(__('Quotations'), Quotation::with('customer')->latest()->paginate(20), [
+        return $this->indexView(__('Quotations'), Quotation::with('customer')->latest()->paginate($this->perPage($request))->withQueryString(), [
             'quotation_no' => __('Number'), 'customer.name' => __('Customer'), 'quotation_date' => __('Date'),
             'total_amount' => __('Total'), 'status' => __('Status'),
         ], 'admin.quotations');
@@ -221,9 +238,9 @@ class PlatformController extends Controller
         return back()->with('status', __('Quotation marked as sent.'));
     }
 
-    public function invoicesIndex(): View
+    public function invoicesIndex(Request $request): View
     {
-        return $this->indexView(__('Invoices'), Invoice::with('customer')->latest()->paginate(20), [
+        return $this->indexView(__('Invoices'), Invoice::with('customer')->latest()->paginate($this->perPage($request))->withQueryString(), [
             'invoice_no' => __('Number'), 'customer.name' => __('Customer'), 'invoice_date' => __('Date'),
             'total_amount' => __('Total'), 'remaining_amount' => __('Balance'), 'status' => __('Status'),
         ], 'admin.invoices');
@@ -238,7 +255,7 @@ class PlatformController extends Controller
     {
         $data = $this->validateDocumentPayload($request, 'invoice');
         $invoice = $service->create(
-            Arr::only($data, ['customer_id', 'invoice_date', 'due_date', 'currency_id', 'notes', 'payment_terms', 'discount_amount', 'other_amount']),
+            Arr::only($data, ['customer_id', 'invoice_date', 'due_date', 'currency_id', 'account_id', 'notes', 'payment_terms', 'discount_amount', 'other_amount']),
             $this->normalizedDocumentItems($data['items']),
             $request->user()->id
         );
@@ -248,13 +265,20 @@ class PlatformController extends Controller
 
     public function invoicesShow(Invoice $invoice): View
     {
-        $invoice->load(['customer', 'currency', 'items']);
+        $invoice->load([
+            'customer',
+            'currency',
+            'items',
+            'account',
+            'payments' => fn ($query) => $query->with('account')->latest('payment_date')->latest('id'),
+        ]);
+
         return view('admin.shared.document', ['title' => $invoice->invoice_no, 'record' => $invoice, 'kind' => 'invoice']);
     }
 
     public function invoicesEdit(Invoice $invoice): View
     {
-        $invoice->load('items');
+        $invoice->load(['items', 'account']);
 
         return $this->documentFormView(
             __('Edit invoice'),
@@ -270,7 +294,7 @@ class PlatformController extends Controller
         $data = $this->validateDocumentPayload($request, 'invoice', updating: true);
         $service->update(
             $invoice,
-            Arr::only($data, ['invoice_date', 'due_date', 'notes', 'payment_terms', 'discount_amount', 'other_amount']),
+            Arr::only($data, ['invoice_date', 'due_date', 'account_id', 'notes', 'payment_terms', 'discount_amount', 'other_amount']),
             $this->normalizedDocumentItems($data['items']),
             $request->user()->id
         );
@@ -300,45 +324,166 @@ class PlatformController extends Controller
         return back()->with('status', __('Invoice posted.'));
     }
 
-    public function paymentsIndex(): View
+    public function paymentsIndex(Request $request): View
     {
-        return $this->indexView(__('Payments'), Payment::with(['customer', 'invoice'])->latest()->paginate(20), [
-            'payment_no' => __('Number'), 'customer.name' => __('Customer'), 'invoice.invoice_no' => __('Invoice'),
-            'payment_date' => __('Date'), 'amount' => __('Amount'), 'status' => __('Status'),
-        ], 'admin.payments', false);
+        $payments = Payment::with(['customer', 'invoice'])
+            ->latest()
+            ->paginate($this->perPage($request))
+            ->withQueryString();
+
+        $depositAccounts = Account::postable()
+            ->where(fn ($q) => $q->where('is_cash_account', true)->orWhere('is_bank_account', true))
+            ->get()
+            ->mapWithKeys(fn ($a) => [$a->id => $a->account_code.' — '.$a->localized_name]);
+
+        $outstandingInvoices = Invoice::outstanding()
+            ->whereIn('status', [
+                InvoiceStatus::Posted,
+                InvoiceStatus::PartiallyPaid,
+                InvoiceStatus::Overdue,
+            ])
+            ->orderByDesc('id')
+            ->get(['id', 'invoice_no', 'remaining_amount']);
+
+        return view('admin.payments.index', [
+            'payments' => $payments,
+            'outstandingInvoices' => $outstandingInvoices,
+            'depositAccounts' => $depositAccounts,
+            'paymentMethods' => $this->enumOptions(PaymentMethod::cases()),
+        ]);
     }
 
-    public function paymentsCreate(): View
+    public function paymentsCreate(): RedirectResponse
     {
-        return $this->formView(__('New payment'), route('admin.payments.store'), [
-            'invoice_id' => $this->selectField(__('Invoice'), Invoice::outstanding()->pluck('invoice_no', 'id')),
-            'account_id' => $this->selectField(__('Deposit account'), Account::postable()->where(fn ($q) => $q->where('is_cash_account', true)->orWhere('is_bank_account', true))->get()->mapWithKeys(fn ($a) => [$a->id => $a->account_code.' — '.$a->localized_name])),
-            'payment_method' => $this->selectField(__('Method'), $this->enumOptions(PaymentMethod::cases())),
-            'payment_date' => ['label' => __('Date'), 'type' => 'date', 'value' => now()->toDateString()],
-            'amount' => ['label' => __('Amount'), 'type' => 'number', 'step' => '0.01'],
-            'reference_no' => ['label' => __('Reference')],
-        ]);
+        return redirect()->route('admin.payments.index', ['new' => 1]);
     }
 
     public function paymentsStore(Request $request, PaymentService $service): RedirectResponse
     {
+        try {
+            $data = $request->validate([
+                'invoice_id' => ['required', 'exists:invoices,id'],
+                'account_id' => [
+                    'required',
+                    'exists:accounts,id',
+                    Rule::exists('accounts', 'id')->where(function ($query) {
+                        $query->where('allow_posting', true)
+                            ->where(function ($query) {
+                                $query->where('is_cash_account', true)
+                                    ->orWhere('is_bank_account', true);
+                            });
+                    }),
+                ],
+                'payment_method' => ['required', Rule::enum(PaymentMethod::class)],
+                'payment_date' => ['required', 'date'],
+                'amount' => ['required', 'numeric', 'gt:0'],
+                'reference_no' => ['nullable', 'string'],
+            ], [
+                'account_id.exists' => __('Deposit account must be a cash or bank account.'),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e->redirectTo(route('admin.payments.index', ['new' => 1]));
+        }
+
+        $invoice = Invoice::query()->findOrFail($data['invoice_id']);
+        if ((float) $data['amount'] > (float) $invoice->remaining_amount) {
+            return redirect()
+                ->route('admin.payments.index', ['new' => 1])
+                ->withInput()
+                ->withErrors(['amount' => __('Payment amount cannot exceed the invoice remaining balance.')]);
+        }
+
+        if (! $request->user()->hasPermission('payments.post')) {
+            return redirect()
+                ->route('admin.payments.index', ['new' => 1])
+                ->withInput()
+                ->withErrors(['amount' => __('You do not have permission to post payments.')]);
+        }
+
         $currency = Currency::where('code', 'USD')->firstOrFail();
-        $payment = $service->create([...$request->validate([
-            'invoice_id' => ['required', 'exists:invoices,id'], 'account_id' => ['required', 'exists:accounts,id'],
-            'payment_method' => ['required', Rule::enum(PaymentMethod::class)], 'payment_date' => ['required', 'date'],
-            'amount' => ['required', 'numeric', 'gt:0'], 'reference_no' => ['nullable', 'string'],
-        ]), 'currency_id' => $currency->id], $request->user()->id);
-        return redirect()->route('admin.payments.index')->with('status', __('Payment created: :number', ['number' => $payment->payment_no]));
+
+        try {
+            $payment = DB::transaction(function () use ($data, $currency, $request, $service) {
+                $payment = $service->create([
+                    ...$data,
+                    'currency_id' => $currency->id,
+                ], $request->user()->id);
+
+                return $service->post($payment, $request->user()->id);
+            });
+        } catch (DomainException $e) {
+            return redirect()
+                ->route('admin.payments.index', ['new' => 1])
+                ->withInput()
+                ->withErrors(['amount' => $e->getMessage()]);
+        }
+
+        return redirect()->route('admin.payments.index')->with('status', __('Payment posted: :number', ['number' => $payment->payment_no]));
     }
 
     public function paymentPost(Request $request, Payment $payment, PaymentService $service): RedirectResponse
     {
-        $service->post($payment, $request->user()->id);
+        try {
+            $service->post($payment, $request->user()->id);
+        } catch (DomainException $e) {
+            return back()->withErrors(['payment' => $e->getMessage()]);
+        }
+
         return back()->with('status', __('Payment posted.'));
     }
 
-    public function accountsIndex(AccountBalanceService $balances): View
+    public function accountsIndex(Request $request, AccountBalanceService $balances): View
     {
+        $q = trim((string) $request->input('q', ''));
+        $type = (string) $request->input('type', 'all');
+        $validTypes = collect(AccountType::cases())->map->value->all();
+        if ($type !== 'all' && ! in_array($type, $validTypes, true)) {
+            $type = 'all';
+        }
+
+        $baseQuery = Account::query()->active()->postable();
+
+        $typeCounts = (clone $baseQuery)
+            ->selectRaw('account_type, COUNT(*) as aggregate')
+            ->groupBy('account_type')
+            ->pluck('aggregate', 'account_type')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+
+        $totalCount = array_sum($typeCounts);
+
+        $listQuery = (clone $baseQuery)->orderBy('account_code');
+
+        if ($type !== 'all') {
+            $listQuery->ofType($type);
+        }
+
+        if ($q !== '') {
+            $listQuery->where(function ($query) use ($q) {
+                $query->where('account_code', 'like', '%'.$q.'%')
+                    ->orWhere('account_name', 'like', '%'.$q.'%')
+                    ->orWhere('account_name_ar', 'like', '%'.$q.'%');
+            });
+        }
+
+        $paginator = $listQuery->paginate($this->perPage($request))->withQueryString();
+        $asOf = now()->toDateString();
+
+        $accounts = $paginator->getCollection()->map(function (Account $account) use ($balances, $asOf) {
+            $accountType = $account->account_type;
+
+            return [
+                'id' => $account->id,
+                'code' => $account->account_code,
+                'name' => $account->localized_name,
+                'type' => $accountType->value,
+                'type_label' => $accountType->label(),
+                'balance' => (float) $balances->balanceAsOf($account, $asOf)['foreign'],
+            ];
+        });
+
+        $paginator->setCollection($accounts);
+
         $parentAccounts = Account::query()
             ->where('is_control_account', true)
             ->active()
@@ -354,11 +499,15 @@ class PlatformController extends Controller
             ->pluck('code', 'id');
 
         $accountTypes = collect(AccountType::cases())
-            ->mapWithKeys(fn (AccountType $type) => [$type->value => $type->label()])
+            ->mapWithKeys(fn (AccountType $accountType) => [$accountType->value => $accountType->label()])
             ->all();
 
         return view('admin.accounting.accounts', [
-            'accounts' => $this->accountingAccountsPayload($balances),
+            'accounts' => $paginator,
+            'typeCounts' => $typeCounts,
+            'totalCount' => $totalCount,
+            'activeType' => $type,
+            'searchQuery' => $q,
             'parentAccounts' => $parentAccounts,
             'currencies' => $currencies,
             'accountTypes' => $accountTypes,
@@ -390,6 +539,134 @@ class PlatformController extends Controller
         return redirect()->route('admin.accounts.index')->with('status', __('Account created.'));
     }
 
+    public function accountsLedger(Request $request, Account $account, ReportingService $reporting): View
+    {
+        [$from, $to] = $this->ledgerDateRange($request);
+        $ledger = $reporting->generalLedgerPaginated(
+            $account->id,
+            $from,
+            $to,
+            $this->perPage($request)
+        );
+
+        return view('admin.accounting.ledger', [
+            'account' => $account,
+            'ledger' => $ledger,
+            'from' => $from,
+            'to' => $to,
+            'paginator' => $ledger['paginator'],
+        ]);
+    }
+
+    public function accountsLedgerPdf(Request $request, Account $account, ReportingService $reporting, DocumentPdfService $pdf): Response
+    {
+        [$from, $to] = $this->ledgerDateRange($request);
+        $ledger = $reporting->generalLedger($account->id, $from, $to);
+
+        return $pdf->download(
+            'pdf.account-ledger',
+            ['account' => $account, 'ledger' => $ledger],
+            'ledger-'.$account->account_code.'.pdf',
+            'landscape'
+        );
+    }
+
+    public function accountsLedgerExcel(Request $request, Account $account, ReportingService $reporting): StreamedResponse
+    {
+        [$from, $to] = $this->ledgerDateRange($request);
+        $ledger = $reporting->generalLedger($account->id, $from, $to);
+        $filename = 'ledger-'.$account->account_code.'.xls';
+
+        $headers = [
+            __('Date'),
+            __('Reference'),
+            __('Description'),
+            __('Debit'),
+            __('Credit'),
+            __('Balance'),
+        ];
+
+        $rows = [];
+        $rows[] = [__('Opening balance'), '', '', '', '', number_format((float) $ledger['opening_balance'], 2, '.', '')];
+
+        foreach ($ledger['lines'] as $line) {
+            $rows[] = [
+                $line['entry_date'] ?? '',
+                $line['entry_no'] ?? '',
+                $line['description'] ?? '',
+                number_format((float) $line['debit'], 2, '.', ''),
+                number_format((float) $line['credit'], 2, '.', ''),
+                number_format((float) $line['running_balance'], 2, '.', ''),
+            ];
+        }
+
+        $rows[] = [__('Closing balance'), '', '', number_format((float) ($ledger['total_debit'] ?? 0), 2, '.', ''), number_format((float) ($ledger['total_credit'] ?? 0), 2, '.', ''), number_format((float) $ledger['closing_balance'], 2, '.', '')];
+
+        $xml = $this->buildSpreadsheetMl(
+            __('Account statement').' — '.$account->account_code.' — '.$account->localized_name,
+            $from.' → '.$to,
+            $headers,
+            $rows
+        );
+
+        return response()->streamDownload(function () use ($xml) {
+            echo $xml;
+        }, $filename, [
+            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function ledgerDateRange(Request $request): array
+    {
+        $validated = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $from = $validated['from'] ?? now()->startOfYear()->toDateString();
+        $to = $validated['to'] ?? now()->toDateString();
+
+        return [(string) $from, (string) $to];
+    }
+
+    /**
+     * @param  list<string>  $headers
+     * @param  list<list<string>>  $rows
+     */
+    private function buildSpreadsheetMl(string $title, string $subtitle, array $headers, array $rows): string
+    {
+        $esc = static fn (?string $value): string => htmlspecialchars((string) ($value ?? ''), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n";
+        $xml .= '<?mso-application progid="Excel.Sheet"?>'."\n";
+        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'."\n";
+        $xml .= '<Worksheet ss:Name="Ledger"><Table>'."\n";
+        $xml .= '<Row><Cell><Data ss:Type="String">'.$esc($title).'</Data></Cell></Row>'."\n";
+        $xml .= '<Row><Cell><Data ss:Type="String">'.$esc($subtitle).'</Data></Cell></Row>'."\n";
+        $xml .= '<Row></Row>'."\n";
+        $xml .= '<Row>';
+        foreach ($headers as $header) {
+            $xml .= '<Cell><Data ss:Type="String">'.$esc($header).'</Data></Cell>';
+        }
+        $xml .= '</Row>'."\n";
+
+        foreach ($rows as $row) {
+            $xml .= '<Row>';
+            foreach ($row as $index => $cell) {
+                $type = $index >= 3 && is_numeric($cell) ? 'Number' : 'String';
+                $xml .= '<Cell><Data ss:Type="'.$type.'">'.$esc((string) $cell).'</Data></Cell>';
+            }
+            $xml .= '</Row>'."\n";
+        }
+
+        $xml .= '</Table></Worksheet></Workbook>';
+
+        return $xml;
+    }
+
     /**
      * @return list<array{id:int,code:string,name:string,type:string,type_label:string,balance:float}>
      */
@@ -418,9 +695,9 @@ class PlatformController extends Controller
             ->all();
     }
 
-    public function expensesIndex(): View
+    public function expensesIndex(Request $request): View
     {
-        return $this->indexView(__('Expenses'), Expense::with('category')->latest()->paginate(20), [
+        return $this->indexView(__('Expenses'), Expense::with('category')->latest()->paginate($this->perPage($request))->withQueryString(), [
             'expense_no' => __('Number'), 'category.name' => __('Category'), 'expense_date' => __('Date'),
             'description' => __('Description'), 'total_amount' => __('Total'), 'status' => __('Status'),
         ], 'admin.expenses', false);
@@ -461,14 +738,15 @@ class PlatformController extends Controller
         return back()->with('status', __('Expense posted.'));
     }
 
-    public function journalsIndex(AccountBalanceService $balances): View
+    public function journalsIndex(Request $request, AccountBalanceService $balances): View
     {
         $paginator = JournalEntry::query()
             ->posted()
             ->with(['lines.account'])
             ->latest('entry_date')
             ->latest('id')
-            ->paginate(30);
+            ->paginate($this->perPage($request, 30))
+            ->withQueryString();
 
         $entries = $paginator->getCollection()->map(function (JournalEntry $entry) {
             return [
@@ -677,9 +955,9 @@ class PlatformController extends Controller
         }
     }
 
-    public function servicesIndex(): View
+    public function servicesIndex(Request $request): View
     {
-        return $this->indexView(__('Service catalog'), Service::orderBy('sort_order')->paginate(20), [
+        return $this->indexView(__('Service catalog'), Service::orderBy('sort_order')->paginate($this->perPage($request))->withQueryString(), [
             'service_code' => __('Code'), 'name' => __('English name'), 'name_ar' => __('Arabic name'),
             'is_public' => __('Public'), 'is_featured' => __('Featured'), 'sort_order' => __('Order'),
         ], 'admin.services', false);
@@ -835,9 +1113,9 @@ class PlatformController extends Controller
             ->with('status', __('Service updated.'));
     }
 
-    public function portfolioIndex(): View
+    public function portfolioIndex(Request $request): View
     {
-        return $this->indexView(__('Portfolio'), PortfolioProject::orderBy('sort_order')->paginate(20), [
+        return $this->indexView(__('Portfolio'), PortfolioProject::orderBy('sort_order')->paginate($this->perPage($request))->withQueryString(), [
             'title' => __('English title'), 'title_ar' => __('Arabic title'), 'client_name' => __('Client'),
             'is_active' => __('Active'), 'is_featured' => __('Featured'),
         ], 'admin.portfolio-projects', false);
@@ -907,7 +1185,7 @@ class PlatformController extends Controller
                 : [['description' => '', 'unit_price' => 0, 'discount_percentage' => 0, 'tax_percentage' => 0]];
         }
 
-        return view($view, [
+        $payload = [
             'title' => $title,
             'action' => $action,
             'method' => $method,
@@ -915,7 +1193,19 @@ class PlatformController extends Controller
             'customers' => Customer::orderBy('name')->pluck('name', 'id'),
             'currencies' => Currency::query()->where('is_active', true)->orderBy('code')->pluck('code', 'id'),
             'initialItems' => $initialItems,
-        ]);
+        ];
+
+        if (str_contains($view, 'invoices')) {
+            $payload['revenueAccounts'] = Account::query()
+                ->active()
+                ->postable()
+                ->ofType(AccountType::Revenue)
+                ->orderBy('account_code')
+                ->get()
+                ->mapWithKeys(fn (Account $a) => [$a->id => $a->account_code.' — '.$a->localized_name]);
+        }
+
+        return view($view, $payload);
     }
 
     /**
@@ -943,6 +1233,19 @@ class PlatformController extends Controller
             'items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.tax_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
+
+        if ($kind === 'invoice') {
+            $rules['account_id'] = [
+                'required',
+                'integer',
+                Rule::exists('accounts', 'id')->where(function ($query) {
+                    $query->where('account_type', AccountType::Revenue->value)
+                        ->where('allow_posting', true)
+                        ->where('is_active', true)
+                        ->whereNull('deleted_at');
+                }),
+            ];
+        }
 
         $data = $request->validate($rules);
         $data['discount_amount'] = (float) ($data['discount_amount'] ?? 0);

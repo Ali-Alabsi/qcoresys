@@ -49,6 +49,18 @@
             @if($record)<input type="hidden" name="currency_id" value="{{ $record->currency_id }}">@endif
             @error('currency_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
+        @if(! empty($revenueAccounts))
+        <div>
+            <label class="label-public" for="account_id">{{ __('Revenue account') }}</label>
+            <select class="input-public" id="account_id" name="account_id" required>
+                <option value="">{{ __('Select') }}</option>
+                @foreach($revenueAccounts as $id => $label)
+                    <option value="{{ $id }}" @selected((string) old('account_id', $record?->account_id ?? '') === (string) $id)>{{ $label }}</option>
+                @endforeach
+            </select>
+            @error('account_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+        @endif
         <div>
             <label class="label-public" for="discount_amount">{{ __('Document discount') }}</label>
             <input class="input-public" id="discount_amount" name="discount_amount" type="number" step="0.01" min="0" x-model.number="discount_amount">

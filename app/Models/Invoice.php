@@ -22,6 +22,7 @@ class Invoice extends Model
         'quotation_id',
         'contract_id',
         'project_id',
+        'account_id',
         'invoice_date',
         'due_date',
         'currency_id',
@@ -80,6 +81,11 @@ class Invoice extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     public function contract(): BelongsTo

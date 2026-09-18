@@ -6,6 +6,7 @@
     'customers' => $customers,
     'currencies' => $currencies,
     'initialItems' => $initialItems,
+    'revenueAccounts' => $revenueAccounts ?? null,
     'dateField' => 'invoice_date',
     'untilField' => 'due_date',
     'untilLabel' => __('Due date'),

@@ -46,11 +46,11 @@ class ApplicationSetupService
     /**
      * Run migrations, seed prototype data, and ensure the admin exists.
      */
-    public function install(bool $force = false): void
+    public function install(bool $force = false, bool $fresh = false): void
     {
         $this->ensureEnvironment();
 
-        if (! $force && $this->isSetupReady()) {
+        if (! $fresh && ! $force && $this->isSetupReady()) {
             return;
         }
 
@@ -60,24 +60,28 @@ class ApplicationSetupService
         $handle = $this->acquireLock($lockPath);
 
         try {
-            if (! $force && $this->isSetupReady()) {
+            if (! $fresh && ! $force && $this->isSetupReady()) {
                 return;
             }
 
             $wasInstalled = $this->isInstalled();
 
-            if (! $force && ! $this->needsInstall()) {
+            if (! $fresh && ! $force && ! $this->needsInstall()) {
                 $this->markSetupReady();
 
                 return;
             }
 
-            Artisan::call('migrate', ['--force' => true]);
+            if ($fresh) {
+                Artisan::call('migrate:fresh', ['--seed' => true, '--force' => true]);
+            } else {
+                Artisan::call('migrate', ['--force' => true]);
 
-            // Seed only on first install (or forced CLI reinstall). Never re-seed
-            // when applying pending migrations to an already-installed app.
-            if ($force || ! $wasInstalled) {
-                Artisan::call('db:seed', ['--force' => true]);
+                // Seed only on first install (or forced CLI reinstall). Never re-seed
+                // when applying pending migrations to an already-installed app.
+                if ($force || ! $wasInstalled) {
+                    Artisan::call('db:seed', ['--force' => true]);
+                }
             }
 
             $this->ensureStorageLink();

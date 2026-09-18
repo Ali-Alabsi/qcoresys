@@ -53,7 +53,7 @@
     @forelse($journal->attachments as $attachment)
         <div class="flex items-center justify-between border-b border-slate-100 py-2 text-sm last:border-0">
             <span>{{ $attachment->original_name }} <span class="text-slate-400">({{ number_format(($attachment->file_size ?? 0) / 1024, 1) }} KB)</span></span>
-            <a class="text-brand-navy underline" href="{{ route('admin.journals.attachments.download', [$journal, $attachment]) }}">{{ __('Download') }}</a>
+            <a class="text-brand-navy underline" href="{{ route('admin.journals.attachments.download', [$journal, $attachment]) }}" data-no-loading>{{ __('Download') }}</a>
         </div>
     @empty
         <p class="text-sm text-slate-500">{{ __('No attachments.') }}</p>

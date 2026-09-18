@@ -28,7 +28,9 @@ class PortalController extends Controller
 
     public function requestsIndex(Request $request): View
     {
-        return view('portal.requests.index', ['requests' => $request->user()->portalCustomer->requests()->latest()->paginate(15)]);
+        return view('portal.requests.index', [
+            'requests' => $request->user()->portalCustomer->requests()->latest()->paginate($this->perPage($request, 20))->withQueryString(),
+        ]);
     }
 
     public function requestsCreate(): View
@@ -69,8 +71,10 @@ class PortalController extends Controller
     public function quotationsIndex(Request $request): View
     {
         return view('portal.documents.index', [
-            'title' => __('Quotations'), 'records' => $request->user()->portalCustomer->quotations()->latest()->paginate(15),
-            'number' => 'quotation_no', 'routeBase' => 'portal.quotations',
+            'title' => __('Quotations'),
+            'records' => $request->user()->portalCustomer->quotations()->latest()->paginate($this->perPage($request, 20))->withQueryString(),
+            'number' => 'quotation_no',
+            'routeBase' => 'portal.quotations',
         ]);
     }
 

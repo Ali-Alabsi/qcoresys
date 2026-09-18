@@ -181,32 +181,129 @@ class ReportingService
 
     public function generalLedger(int $accountId, ?string $from = null, ?string $to = null): array
     {
+        return $this->buildGeneralLedger($accountId, $from, $to, null);
+    }
+
+    public function generalLedgerPaginated(int $accountId, ?string $from, ?string $to, int $perPage): array
+    {
+        return $this->buildGeneralLedger($accountId, $from, $to, max(1, $perPage));
+    }
+
+    /**
+     * @return array{
+     *     account_id:int,
+     *     account_code:string,
+     *     account_name:string,
+     *     from:?string,
+     *     to:?string,
+     *     opening_balance:float,
+     *     page_opening_balance:float,
+     *     closing_balance:float,
+     *     total_debit:float,
+     *     total_credit:float,
+     *     lines:list<array<string, mixed>>,
+     *     paginator:?\Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * }
+     */
+    private function buildGeneralLedger(int $accountId, ?string $from, ?string $to, ?int $perPage): array
+    {
         $account = Account::query()->findOrFail($accountId);
 
-        $query = JournalEntryLine::query()
-            ->with(['journalEntry'])
+        $baseQuery = JournalEntryLine::query()
             ->join('journal_entries', 'journal_entries.id', '=', 'journal_entry_lines.journal_entry_id')
             ->where('journal_entry_lines.account_id', $accountId)
-            ->where('journal_entries.status', JournalStatus::Posted->value)
+            ->where('journal_entries.status', JournalStatus::Posted->value);
+
+        if ($from !== null) {
+            $baseQuery->whereDate('journal_entries.entry_date', '>=', $from);
+        }
+
+        if ($to !== null) {
+            $baseQuery->whereDate('journal_entries.entry_date', '<=', $to);
+        }
+
+        if ($from !== null) {
+            $openingAsOf = Carbon::parse($from)->subDay()->toDateString();
+            $openingBalance = (float) app(AccountBalanceService::class)->balanceAsOf($account, $openingAsOf)['base'];
+        } else {
+            $openingBalance = $account->normal_balance === NormalBalance::Debit
+                ? Money::subtract($account->opening_debit, $account->opening_credit)
+                : Money::subtract($account->opening_credit, $account->opening_debit);
+        }
+
+        $totals = (clone $baseQuery)
+            ->selectRaw('COALESCE(SUM(journal_entry_lines.debit_base), 0) as total_debit, COALESCE(SUM(journal_entry_lines.credit_base), 0) as total_credit')
+            ->first();
+
+        $totalDebit = (float) ($totals->total_debit ?? 0);
+        $totalCredit = (float) ($totals->total_credit ?? 0);
+
+        if ($account->normal_balance === NormalBalance::Debit) {
+            $closingBalance = Money::add($openingBalance, $totalDebit, -$totalCredit);
+        } else {
+            $closingBalance = Money::add($openingBalance, $totalCredit, -$totalDebit);
+        }
+
+        $orderedQuery = (clone $baseQuery)
+            ->with(['journalEntry'])
             ->orderBy('journal_entries.entry_date')
             ->orderBy('journal_entry_lines.id')
             ->select('journal_entry_lines.*');
 
-        if ($from !== null) {
-            $query->whereDate('journal_entries.entry_date', '>=', $from);
-        }
+        $paginator = null;
+        $pageOpeningBalance = $openingBalance;
 
-        if ($to !== null) {
-            $query->whereDate('journal_entries.entry_date', '<=', $to);
-        }
+        if ($perPage !== null) {
+            $total = (clone $baseQuery)->count('journal_entry_lines.id');
+            $page = max(1, (int) request()->integer('page', 1));
+            $offset = ($page - 1) * $perPage;
 
-        $runningBalance = $account->normal_balance === NormalBalance::Debit
-            ? Money::subtract($account->opening_debit, $account->opening_credit)
-            : Money::subtract($account->opening_credit, $account->opening_debit);
+            if ($offset > 0) {
+                $prior = (clone $baseQuery)
+                    ->orderBy('journal_entries.entry_date')
+                    ->orderBy('journal_entry_lines.id')
+                    ->skip(0)
+                    ->take($offset)
+                    ->select([
+                        'journal_entry_lines.debit_base',
+                        'journal_entry_lines.credit_base',
+                    ])
+                    ->get();
+
+                foreach ($prior as $line) {
+                    $debit = (float) $line->debit_base;
+                    $credit = (float) $line->credit_base;
+                    if ($account->normal_balance === NormalBalance::Debit) {
+                        $pageOpeningBalance = Money::add($pageOpeningBalance, $debit, -$credit);
+                    } else {
+                        $pageOpeningBalance = Money::add($pageOpeningBalance, $credit, -$debit);
+                    }
+                }
+            }
+
+            $pageLines = (clone $orderedQuery)->skip($offset)->take($perPage)->get();
+
+            $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                $pageLines,
+                $total,
+                $perPage,
+                $page,
+                [
+                    'path' => \Illuminate\Pagination\Paginator::resolveCurrentPath(),
+                    'pageName' => 'page',
+                ]
+            );
+            $paginator->withQueryString();
+
+            $sourceLines = $pageLines;
+            $runningBalance = $pageOpeningBalance;
+        } else {
+            $sourceLines = $orderedQuery->get();
+            $runningBalance = $openingBalance;
+        }
 
         $lines = [];
-
-        foreach ($query->get() as $line) {
+        foreach ($sourceLines as $line) {
             $debit = (float) $line->debit_base;
             $credit = (float) $line->credit_base;
 
@@ -231,14 +328,16 @@ class ReportingService
         return [
             'account_id' => $account->id,
             'account_code' => $account->account_code,
-            'account_name' => $account->account_name,
+            'account_name' => $account->localized_name,
             'from' => $from,
             'to' => $to,
-            'opening_balance' => $account->normal_balance === NormalBalance::Debit
-                ? Money::subtract($account->opening_debit, $account->opening_credit)
-                : Money::subtract($account->opening_credit, $account->opening_debit),
-            'closing_balance' => $runningBalance,
+            'opening_balance' => $openingBalance,
+            'page_opening_balance' => $pageOpeningBalance,
+            'closing_balance' => $closingBalance,
+            'total_debit' => $totalDebit,
+            'total_credit' => $totalCredit,
             'lines' => $lines,
+            'paginator' => $paginator,
         ];
     }
 

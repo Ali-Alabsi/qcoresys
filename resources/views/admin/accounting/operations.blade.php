@@ -12,11 +12,16 @@
     ];
 @endphp
 
-<div class="mb-6 flex items-center justify-between gap-4">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
   <h1 class="text-2xl font-bold text-brand-navy">{{ __('Financial operations') }}</h1>
-  @if(auth()->user()->hasPermission('journals.create'))
-    <button type="button" id="btnOpenJournal" class="btn-primary !px-4 !py-2">{{ __('Post journal') }}</button>
-  @endif
+  <div class="flex flex-wrap items-center gap-3">
+    @isset($paginator)
+      @include('admin.shared.per-page', ['paginator' => $paginator, 'selectId' => 'journals_per_page'])
+    @endisset
+    @if(auth()->user()->hasPermission('journals.create'))
+      <button type="button" id="btnOpenJournal" class="btn-primary !px-4 !py-2">{{ __('Post journal') }}</button>
+    @endif
+  </div>
 </div>
 
 <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -62,7 +67,7 @@
     </table>
   </div>
   @if (isset($paginator) && method_exists($paginator, 'links'))
-    <div class="border-t border-slate-100 p-4">{{ $paginator->links() }}</div>
+    @include('admin.shared.pagination', ['paginator' => $paginator])
   @endif
 </div>
 @endsection

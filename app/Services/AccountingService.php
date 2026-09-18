@@ -33,9 +33,10 @@ class AccountingService
     {
         $invoice->loadMissing('customer');
         $arAccountId = $this->customerReceivableAccountId($invoice->customer);
-        $revenueAccountId = $invoice->project_id
-            ? $this->getSettingAccountId('account_revenue_project')
-            : $this->getSettingAccountId('account_revenue_consulting');
+        $revenueAccountId = $invoice->account_id
+            ?: ($invoice->project_id
+                ? $this->getSettingAccountId('account_revenue_project')
+                : $this->getSettingAccountId('account_revenue_consulting'));
 
         $signedAmount = (float) $invoice->total_amount;
 
@@ -158,7 +159,12 @@ class AccountingService
 
     public function revenueAccounts(): \Illuminate\Database\Eloquent\Collection
     {
-        return Account::query()->where('account_type', AccountType::Revenue)->get();
+        return Account::query()
+            ->active()
+            ->postable()
+            ->where('account_type', AccountType::Revenue)
+            ->orderBy('account_code')
+            ->get();
     }
 
     public function expenseAccounts(): \Illuminate\Database\Eloquent\Collection

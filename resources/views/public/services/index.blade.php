@@ -82,7 +82,15 @@
                     </select>
                 </div>
             </div>
-            <div class="mt-4 flex flex-wrap gap-3">
+            <div class="mt-4 flex flex-wrap items-end gap-3">
+                <div>
+                    <label class="label-public" for="services_per_page">{{ __('Per page') }}</label>
+                    <select id="services_per_page" name="per_page" class="input-public !w-auto">
+                        @foreach ([10, 12, 20, 30, 50] as $option)
+                            <option value="{{ $option }}" @selected((int) $services->perPage() === (int) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
                 <button type="submit" class="btn-navy !py-2.5">{{ __('Filter') }}</button>
                 <a href="{{ route('services.index') }}" class="btn-secondary !py-2.5">{{ __('Clear filters') }}</a>
             </div>
@@ -111,7 +119,7 @@
                 @endforeach
             </div>
             <div class="mt-10">
-                {{ $services->links() }}
+                @include('admin.shared.pagination', ['paginator' => $services])
             </div>
         @endif
     </div>

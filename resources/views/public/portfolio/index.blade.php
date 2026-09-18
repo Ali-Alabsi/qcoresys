@@ -31,7 +31,7 @@
                     </a>
                 @endforeach
             </div>
-            <div class="mt-10">{{ $projects->links() }}</div>
+            <div class="mt-10">@include('admin.shared.pagination', ['paginator' => $projects])</div>
         @endif
     </div>
 </section>

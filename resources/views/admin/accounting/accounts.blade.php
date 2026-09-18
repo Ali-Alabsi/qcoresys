@@ -2,9 +2,12 @@
 @section('title', __('Accounts'))
 @section('content')
 @php
-    $typeCounts = collect($accounts)->countBy(fn ($acc) => $acc['type']);
     $canCreate = auth()->user()->hasPermission('accounts.create');
     $openCreateModal = $canCreate && (request()->boolean('new') || $errors->any());
+    $filterBase = array_filter([
+        'q' => $searchQuery !== '' ? $searchQuery : null,
+        'per_page' => request('per_page'),
+    ], fn ($value) => $value !== null && $value !== '');
 @endphp
 <style>
   .acc-filter-chip {
@@ -84,127 +87,127 @@
     }
   }
 </style>
-<div
-  x-data="{
-    filter: 'all',
-    query: '',
-    accounts: {{ \Illuminate\Support\Js::from($accounts) }},
-    counts: {{ \Illuminate\Support\Js::from($typeCounts) }},
-    setFilter(type) {
-      this.filter = this.filter === type ? 'all' : type
-    },
-    matches(acc) {
-      if (!acc) return false
-      if (this.filter !== 'all' && this.filter !== acc.type) return false
-      const q = this.query.trim().toLowerCase()
-      if (!q) return true
-      return String(acc.code).toLowerCase().includes(q)
-        || String(acc.name).toLowerCase().includes(q)
-    },
-    visibleCount() {
-      return this.accounts.filter(acc => this.matches(acc)).length
-    }
-  }"
->
-  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <h1 class="text-2xl font-bold text-brand-navy">{{ __('Accounts') }}</h1>
-      <span class="rounded-full bg-slate-200 px-3 py-1 font-mono text-xs text-slate-600" x-text="visibleCount()">{{ count($accounts) }}</span>
-    </div>
-    @if($canCreate)
-      <button type="button" id="btnOpenAccount" class="btn-primary !px-4 !py-2">{{ __('New account') }}</button>
-    @endif
-  </div>
 
-  <div class="mb-4">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+  <div class="flex items-center gap-3">
+    <h1 class="text-2xl font-bold text-brand-navy">{{ __('Accounts') }}</h1>
+    <span class="rounded-full bg-slate-200 px-3 py-1 font-mono text-xs text-slate-600">{{ $accounts->total() }}</span>
+  </div>
+  @if($canCreate)
+    <button type="button" id="btnOpenAccount" class="btn-primary !px-4 !py-2">{{ __('New account') }}</button>
+  @endif
+</div>
+
+<form method="GET" action="{{ route('admin.accounts.index') }}" class="mb-4 flex flex-wrap items-end gap-3">
+  @if ($activeType !== 'all')
+    <input type="hidden" name="type" value="{{ $activeType }}">
+  @endif
+  <div class="w-full max-w-md">
     <label class="sr-only" for="accounts-search">{{ __('Search accounts...') }}</label>
     <input
       id="accounts-search"
       type="search"
-      x-model="query"
+      name="q"
+      value="{{ $searchQuery }}"
       placeholder="{{ __('Search accounts...') }}"
-      class="input-public w-full max-w-md"
+      class="input-public w-full"
       autocomplete="off"
     >
   </div>
-
-  <div class="mb-4 flex flex-wrap gap-2">
-    <button
-      type="button"
-      @click="filter = 'all'"
-      class="acc-filter-chip rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"
-      :class="{ 'is-active': filter === 'all', 'is-active-all': filter === 'all' }"
-      :aria-pressed="filter === 'all'"
+  <div>
+    <label for="accounts_per_page" class="mb-1 block text-xs font-bold text-slate-500">{{ __('Per page') }}</label>
+    <select
+      id="accounts_per_page"
+      name="per_page"
+      class="input-public !w-auto !px-2 !py-1.5 text-sm"
+      onchange="this.form.submit()"
     >
-      {{ __('All') }}
-      <span class="ms-1 font-mono">{{ count($accounts) }}</span>
-    </button>
-    @foreach (\App\Enums\AccountType::cases() as $type)
-      <button
-        type="button"
-        @click="setFilter('{{ $type->value }}')"
-        class="acc-filter-chip rounded-full px-3 py-1.5 text-xs font-bold {{ $type->badgeClasses() }}"
-        :class="{ 'is-active': filter === '{{ $type->value }}' }"
-        :aria-pressed="filter === '{{ $type->value }}'"
-      >
-        {{ $type->label() }}
-        <span class="ms-1 font-mono">{{ $typeCounts[$type->value] ?? 0 }}</span>
-      </button>
-    @endforeach
+      @foreach ([10, 20, 30, 50] as $option)
+        <option value="{{ $option }}" @selected((int) $accounts->perPage() === (int) $option)>{{ $option }}</option>
+      @endforeach
+    </select>
   </div>
+  <button type="submit" class="btn-secondary !px-4 !py-2 text-sm">{{ __('Search') }}</button>
+  @if ($searchQuery !== '' || $activeType !== 'all')
+    <a href="{{ route('admin.accounts.index', array_filter(['per_page' => request('per_page')])) }}" class="text-sm font-semibold text-cyan-700 hover:underline">{{ __('Clear') }}</a>
+  @endif
+</form>
 
-  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div class="border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold text-brand-navy">
-      {{ __('Chart of accounts') }}
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full text-sm">
-        <thead class="bg-slate-50 text-xs uppercase text-slate-500">
-          <tr>
-            <th class="px-4 py-3 text-start">{{ __('Account Code') }}</th>
-            <th class="px-4 py-3 text-start">{{ __('Account Name') }}</th>
-            <th class="px-4 py-3 text-start">{{ __('Account type') }}</th>
-            <th class="px-4 py-3 text-end">{{ __('Current Balance') }}</th>
+<div class="mb-4 flex flex-wrap gap-2">
+  <a
+    href="{{ route('admin.accounts.index', $filterBase) }}"
+    class="acc-filter-chip rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 {{ $activeType === 'all' ? 'is-active is-active-all' : '' }}"
+    aria-pressed="{{ $activeType === 'all' ? 'true' : 'false' }}"
+  >
+    {{ __('All') }}
+    <span class="ms-1 font-mono">{{ $totalCount }}</span>
+  </a>
+  @foreach (\App\Enums\AccountType::cases() as $type)
+    <a
+      href="{{ route('admin.accounts.index', $activeType === $type->value ? $filterBase : array_merge($filterBase, ['type' => $type->value])) }}"
+      class="acc-filter-chip rounded-full px-3 py-1.5 text-xs font-bold {{ $type->badgeClasses() }} {{ $activeType === $type->value ? 'is-active' : '' }}"
+      aria-pressed="{{ $activeType === $type->value ? 'true' : 'false' }}"
+    >
+      {{ $type->label() }}
+      <span class="ms-1 font-mono">{{ $typeCounts[$type->value] ?? 0 }}</span>
+    </a>
+  @endforeach
+</div>
+
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold text-brand-navy">
+    {{ __('Chart of accounts') }}
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+        <tr>
+          <th class="px-4 py-3 text-start">{{ __('Account Code') }}</th>
+          <th class="px-4 py-3 text-start">{{ __('Account Name') }}</th>
+          <th class="px-4 py-3 text-start">{{ __('Account type') }}</th>
+          <th class="px-4 py-3 text-end">{{ __('Current Balance') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        @forelse ($accounts as $acc)
+          @php
+            $accountType = \App\Enums\AccountType::tryFrom($acc['type'] ?? '');
+          @endphp
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3 font-mono text-xs font-bold text-cyan-700">
+              <a href="{{ route('admin.accounts.ledger', $acc['id']) }}" class="hover:underline">{{ $acc['code'] }}</a>
+            </td>
+            <td class="px-4 py-3 font-medium">
+              <a href="{{ route('admin.accounts.ledger', $acc['id']) }}" class="hover:underline text-brand-navy">{{ $acc['name'] }}</a>
+            </td>
+            <td class="px-4 py-3">
+              @if ($accountType)
+                <a
+                  href="{{ route('admin.accounts.index', array_merge($filterBase, ['type' => $accountType->value])) }}"
+                  class="acc-filter-chip inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold {{ $accountType->badgeClasses() }} {{ $activeType === $accountType->value ? 'is-active' : '' }}"
+                  aria-pressed="{{ $activeType === $accountType->value ? 'true' : 'false' }}"
+                >
+                  {{ $acc['type_label'] }}
+                </a>
+              @endif
+            </td>
+            <td class="px-4 py-3 text-end font-mono text-xs font-bold {{ $acc['balance'] > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
+              {{ number_format($acc['balance'], 2) }}
+            </td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          @forelse ($accounts as $index => $acc)
-            @php
-              $accountType = \App\Enums\AccountType::tryFrom($acc['type'] ?? '');
-            @endphp
-            <tr class="hover:bg-slate-50" x-show="matches(accounts[{{ $index }}])">
-              <td class="px-4 py-3 font-mono text-xs font-bold text-slate-500">{{ $acc['code'] }}</td>
-              <td class="px-4 py-3 font-medium">{{ $acc['name'] }}</td>
-              <td class="px-4 py-3">
-                @if ($accountType)
-                  <button
-                    type="button"
-                    @click="setFilter('{{ $accountType->value }}')"
-                    class="acc-filter-chip inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold {{ $accountType->badgeClasses() }}"
-                    :class="{ 'is-active': filter === '{{ $accountType->value }}' }"
-                    :aria-pressed="filter === '{{ $accountType->value }}'"
-                  >
-                    {{ $acc['type_label'] }}
-                  </button>
-                @endif
-              </td>
-              <td class="px-4 py-3 text-end font-mono text-xs font-bold {{ $acc['balance'] > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
-                {{ number_format($acc['balance'], 2) }}
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">{{ __('No active accounts.') }}</td></tr>
-          @endforelse
-          @if (count($accounts) > 0)
-            <tr x-show="visibleCount() === 0" x-cloak>
-              <td colspan="4" class="px-4 py-8 text-center text-slate-500">{{ __('No matching accounts.') }}</td>
-            </tr>
-          @endif
-        </tbody>
-      </table>
-    </div>
+        @empty
+          <tr>
+            <td colspan="4" class="px-4 py-8 text-center text-slate-500">
+              {{ ($searchQuery !== '' || $activeType !== 'all') ? __('No matching accounts.') : __('No active accounts.') }}
+            </td>
+          </tr>
+        @endforelse
+      </tbody>
+    </table>
   </div>
 </div>
+
+@include('admin.shared.pagination', ['paginator' => $accounts])
 
 @if($canCreate)
 <div id="accountModal" class="{{ $openCreateModal ? 'is-open' : '' }}" aria-hidden="{{ $openCreateModal ? 'false' : 'true' }}">

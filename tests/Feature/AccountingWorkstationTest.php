@@ -37,8 +37,8 @@ class AccountingWorkstationTest extends TestCase
             ->assertSee('سجل القيود المرحلة', false)
             ->assertSee('قيد محاسبي جديد', false);
 
-        $this->actingAs($this->admin)
-            ->get(route('admin.accounts.index'))
+        $accountsIndex = $this->actingAs($this->admin)
+            ->get(route('admin.accounts.index', ['per_page' => 50]))
             ->assertOk()
             ->assertSee('دليل الحسابات', false)
             ->assertSee('ابحث في الحسابات...', false)
@@ -53,10 +53,10 @@ class AccountingWorkstationTest extends TestCase
             ->assertSee('حقوق ملكية', false)
             ->assertSee('إيرادات', false)
             ->assertSee('مصروفات', false)
-            ->assertSee("setFilter('ASSET')", false)
-            ->assertSee("setFilter('LIABILITY')", false)
+            ->assertSee('name="q"', false)
+            ->assertSee('type=ASSET', false)
+            ->assertSee('type=LIABILITY', false)
             ->assertSee('is-active', false)
-            ->assertSee("filter === 'ASSET'", false)
             ->assertSee('3211', false)
             ->assertSee('3212', false)
             ->assertSee('3311', false)
@@ -73,6 +73,20 @@ class AccountingWorkstationTest extends TestCase
             ->assertSee('أرباح محتجزة / أرباح مرحلة علي نبيل - دولار امريكي', false)
             ->assertSee('توزيعات أرباح مستحقة محمد المحفدي - دولار امريكي', false)
             ->assertSee('توزيعات أرباح مستحقة علي نبيل - دولار امريكي', false);
+
+        $accountsIndex->assertSee(__('Per page'), false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.index', ['type' => AccountType::Asset->value, 'per_page' => 50]))
+            ->assertOk()
+            ->assertSee('111101', false)
+            ->assertDontSee('>3111<', false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.index', ['q' => '111101']))
+            ->assertOk()
+            ->assertSee('111101', false)
+            ->assertDontSee('111102', false);
     }
 
     public function test_admin_can_create_leaf_account_under_control_parent(): void
@@ -240,5 +254,136 @@ class AccountingWorkstationTest extends TestCase
             ->assertStatus(422);
 
         $this->assertSame(0, JournalEntry::query()->count());
+    }
+
+    public function test_account_row_links_to_ledger_and_exports_work(): void
+    {
+        $cash = Account::query()->where('account_code', '111101')->firstOrFail();
+        $capital = Account::query()->where('account_code', '3111')->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->postJson(route('admin.journals.store'), [
+                'entry_date' => now()->toDateString(),
+                'description' => 'قيد لكشف الحساب',
+                'lines' => [
+                    ['account_code' => '111101', 'debit' => 250, 'credit' => 0],
+                    ['account_code' => '3111', 'debit' => 0, 'credit' => 250],
+                ],
+            ])
+            ->assertOk();
+
+        $entry = JournalEntry::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.index'))
+            ->assertOk()
+            ->assertSee(route('admin.accounts.ledger', $cash), false);
+
+        $ledgerResponse = $this->actingAs($this->admin)
+            ->get(route('admin.accounts.ledger', [
+                'account' => $cash,
+                'from' => now()->startOfYear()->toDateString(),
+                'to' => now()->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSee('كشف الحساب', false)
+            ->assertSee('111101', false)
+            ->assertSee('قيد لكشف الحساب', false)
+            ->assertSee($entry->entry_no, false)
+            ->assertSee('250.00', false)
+            ->assertSee(__('Export PDF'), false)
+            ->assertSee(__('Export Excel'), false);
+
+        $ledgerResponse->assertSee(route('admin.journals.show', $entry), false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.accounts.ledger.pdf', [
+                'account' => $cash,
+                'from' => now()->startOfYear()->toDateString(),
+                'to' => now()->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $excel = $this->actingAs($this->admin)
+            ->get(route('admin.accounts.ledger.excel', [
+                'account' => $cash,
+                'from' => now()->startOfYear()->toDateString(),
+                'to' => now()->toDateString(),
+            ]))
+            ->assertOk();
+
+        $excel->assertHeader('content-disposition');
+        $this->assertStringContainsString('ledger-111101.xls', (string) $excel->headers->get('content-disposition'));
+        $this->assertStringContainsString('111101', $excel->streamedContent());
+        $this->assertStringContainsString('قيد لكشف الحساب', $excel->streamedContent());
+        $this->assertStringContainsString('250.00', $excel->streamedContent());
+
+        $forbidden = User::factory()->create([
+            'email' => 'no.accounts@qcoresys.test',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($forbidden)
+            ->get(route('admin.accounts.ledger', $cash))
+            ->assertForbidden();
+
+        $this->assertNotNull($capital);
+    }
+
+    public function test_ledger_pagination_preserves_running_balance_across_pages(): void
+    {
+        $cash = Account::query()->where('account_code', '111101')->firstOrFail();
+        $capital = Account::query()->where('account_code', '3111')->firstOrFail();
+
+        for ($i = 1; $i <= 12; $i++) {
+            $this->actingAs($this->admin)
+                ->postJson(route('admin.journals.store'), [
+                    'entry_date' => now()->toDateString(),
+                    'description' => 'قيد صفحة '.$i,
+                    'lines' => [
+                        ['account_code' => '111101', 'debit' => 10, 'credit' => 0],
+                        ['account_code' => '3111', 'debit' => 0, 'credit' => 10],
+                    ],
+                ])
+                ->assertOk();
+        }
+
+        $page1 = $this->actingAs($this->admin)
+            ->get(route('admin.accounts.ledger', [
+                'account' => $cash,
+                'from' => now()->startOfYear()->toDateString(),
+                'to' => now()->toDateString(),
+                'per_page' => 10,
+                'page' => 1,
+            ]))
+            ->assertOk()
+            ->assertSee(__('Opening balance'), false)
+            ->assertSee('قيد صفحة 1', false)
+            ->assertSee('قيد صفحة 10', false)
+            ->assertDontSee('قيد صفحة 11', false);
+
+        $page1->assertSee('100.00', false);
+        $page1->assertSee('120.00', false);
+
+        $page2 = $this->actingAs($this->admin)
+            ->get(route('admin.accounts.ledger', [
+                'account' => $cash,
+                'from' => now()->startOfYear()->toDateString(),
+                'to' => now()->toDateString(),
+                'per_page' => 10,
+                'page' => 2,
+            ]))
+            ->assertOk()
+            ->assertSee(__('Balance brought forward'), false)
+            ->assertSee('قيد صفحة 11', false)
+            ->assertSee('قيد صفحة 12', false)
+            ->assertDontSee('قيد صفحة 10', false);
+
+        $page2->assertSee('100.00', false);
+        $page2->assertSee('110.00', false);
+        $page2->assertSee('120.00', false);
+
+        $this->assertNotNull($capital);
     }
 }

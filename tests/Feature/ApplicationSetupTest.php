@@ -74,6 +74,19 @@ class ApplicationSetupTest extends TestCase
         ])->assertRedirect(route('admin.dashboard'));
     }
 
+    public function test_fresh_install_requests_a_full_rebuild(): void
+    {
+        $setup = \Mockery::mock(ApplicationSetupService::class);
+        $setup->shouldReceive('install')->once()->with(true, true);
+        $setup->shouldReceive('adminEmail')->andReturn('admin@qcoresys.com');
+        $setup->shouldReceive('adminPassword')->andReturn('password');
+
+        $this->app->instance(ApplicationSetupService::class, $setup);
+
+        $this->artisan('qcoresys:install', ['--fresh' => true, '--no-interaction' => true])
+            ->assertSuccessful();
+    }
+
     public function test_has_pending_migrations_reads_repository_ran_list(): void
     {
         $setup = app(ApplicationSetupService::class);
