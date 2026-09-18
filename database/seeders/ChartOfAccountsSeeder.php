@@ -58,7 +58,7 @@ class ChartOfAccountsSeeder extends Seeder
         $currencyCode = $node['currency'] ?? null;
         $active = (bool) ($node['active'] ?? true);
 
-        $account = Account::query()->updateOrCreate(
+        $account = Account::withTrashed()->updateOrCreate(
             ['account_code' => $node['code']],
             [
                 'account_name' => $node['name'],
@@ -80,8 +80,13 @@ class ChartOfAccountsSeeder extends Seeder
                 'opening_debit' => 0,
                 'opening_credit' => 0,
                 'current_balance' => 0,
+                'deleted_at' => null,
             ]
         );
+
+        if ($account->trashed()) {
+            $account->restore();
+        }
 
         $this->idsByCode[$node['code']] = $account->id;
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Web\Admin\AuthController;
 use App\Http\Controllers\Web\Admin\PdfController;
 use App\Http\Controllers\Web\Admin\PlatformController;
+use App\Http\Controllers\Web\Admin\SetupController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
@@ -80,5 +81,9 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
 
         Route::get('settings', [PlatformController::class, 'settingsEdit'])->middleware('permission:settings.view')->name('settings.edit');
         Route::put('settings', [PlatformController::class, 'settingsUpdate'])->middleware('permission:settings.update')->name('settings.update');
+
+        Route::get('setup', [SetupController::class, 'index'])->middleware('permission:settings.view')->name('setup.index');
+        Route::post('setup/accounts', [SetupController::class, 'accounts'])->middleware('permission:settings.update')->name('setup.accounts');
+        Route::post('setup/portfolio', [SetupController::class, 'portfolio'])->middleware('permission:settings.update')->name('setup.portfolio');
     });
 });

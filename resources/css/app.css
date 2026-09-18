@@ -248,8 +248,21 @@
         white-space: pre-line;
     }
 
-    .app-dialog__ok {
+    .app-dialog__actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+    }
+
+    .app-dialog__ok,
+    .app-dialog__cancel {
         min-width: 7rem;
+    }
+
+    .app-dialog__cancel[hidden] {
+        display: none !important;
     }
 
     html.app-dialog-open {

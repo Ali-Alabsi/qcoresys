@@ -1,5 +1,6 @@
 /**
- * Global feedback dialog for success / error / warning results.
+ * Global feedback dialog for success / error / warning results,
+ * plus confirm/cancel prompts.
  */
 const ICONS = {
     success: `
@@ -24,8 +25,12 @@ let titleEl = null;
 let messageEl = null;
 let iconEl = null;
 let okBtn = null;
+let cancelBtn = null;
+let actionsEl = null;
 let previousFocus = null;
 let pendingOnClose = null;
+let confirmResolver = null;
+let mode = 'alert';
 
 function isArabic() {
     const lang = (document.documentElement.lang || '').toLowerCase();
@@ -38,16 +43,22 @@ function t(key) {
         error: 'فشلت العملية',
         warning: 'تنبيه',
         ok: 'موافق',
+        cancel: 'إلغاء',
+        confirm: 'تأكيد',
         defaultSuccess: 'تمت العملية بنجاح.',
         defaultError: 'حدث خطأ أثناء تنفيذ العملية.',
+        defaultConfirm: 'هل أنت متأكد من تنفيذ هذه العملية؟',
     };
     const en = {
         success: 'Operation completed successfully',
         error: 'Operation failed',
         warning: 'Warning',
         ok: 'OK',
+        cancel: 'Cancel',
+        confirm: 'Confirm',
         defaultSuccess: 'The operation completed successfully.',
         defaultError: 'Something went wrong while processing the request.',
+        defaultConfirm: 'Are you sure you want to continue?',
     };
     return (isArabic() ? ar : en)[key];
 }
@@ -67,24 +78,51 @@ function ensureDialog() {
             <div class="app-dialog__icon" data-app-dialog-icon></div>
             <h2 class="app-dialog__title" id="app-dialog-title"></h2>
             <p class="app-dialog__message" id="app-dialog-message"></p>
-            <button type="button" class="app-dialog__ok btn-primary" data-app-dialog-ok></button>
+            <div class="app-dialog__actions">
+                <button type="button" class="app-dialog__cancel btn-secondary" data-app-dialog-cancel hidden></button>
+                <button type="button" class="app-dialog__ok btn-primary" data-app-dialog-ok></button>
+            </div>
         </div>
     `;
 
     titleEl = dialogEl.querySelector('#app-dialog-title');
     messageEl = dialogEl.querySelector('#app-dialog-message');
     iconEl = dialogEl.querySelector('[data-app-dialog-icon]');
+    actionsEl = dialogEl.querySelector('.app-dialog__actions');
     okBtn = dialogEl.querySelector('[data-app-dialog-ok]');
+    cancelBtn = dialogEl.querySelector('[data-app-dialog-cancel]');
 
-    dialogEl.querySelector('[data-app-dialog-dismiss]').addEventListener('click', hide);
-    okBtn.addEventListener('click', hide);
+    dialogEl.querySelector('[data-app-dialog-dismiss]').addEventListener('click', () => dismiss(false));
+    okBtn.addEventListener('click', () => dismiss(true));
+    cancelBtn.addEventListener('click', () => dismiss(false));
     document.body.appendChild(dialogEl);
     return dialogEl;
 }
 
 function onKeydown(event) {
     if (event.key === 'Escape') {
-        hide();
+        dismiss(false);
+    }
+}
+
+function resolveConfirm(result) {
+    if (typeof confirmResolver === 'function') {
+        const resolve = confirmResolver;
+        confirmResolver = null;
+        resolve(result);
+    }
+}
+
+function dismiss(confirmed) {
+    if (!dialogEl) {
+        return;
+    }
+
+    const wasConfirm = mode === 'confirm';
+    hide();
+
+    if (wasConfirm) {
+        resolveConfirm(Boolean(confirmed));
     }
 }
 
@@ -93,16 +131,25 @@ function show(type, message, title, onClose) {
         window.AppLoading.forceHide();
     }
 
+    // Closing a previous confirm without answer rejects it.
+    if (mode === 'confirm' && confirmResolver) {
+        resolveConfirm(false);
+    }
+
     const el = ensureDialog();
     const kind = ['success', 'error', 'warning'].includes(type) ? type : 'success';
     const text = (message && String(message).trim()) || (kind === 'error' ? t('defaultError') : t('defaultSuccess'));
 
+    mode = 'alert';
     pendingOnClose = typeof onClose === 'function' ? onClose : null;
     el.dataset.type = kind;
+    el.dataset.mode = 'alert';
     iconEl.innerHTML = ICONS[kind];
     titleEl.textContent = title || t(kind);
     messageEl.textContent = text;
     okBtn.textContent = t('ok');
+    cancelBtn.hidden = true;
+    cancelBtn.textContent = t('cancel');
 
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     el.classList.add('is-open');
@@ -110,6 +157,46 @@ function show(type, message, title, onClose) {
     document.documentElement.classList.add('app-dialog-open');
     document.addEventListener('keydown', onKeydown);
     okBtn.focus();
+}
+
+/**
+ * @param {string} message
+ * @param {{ title?: string, confirmText?: string, cancelText?: string }} [options]
+ * @returns {Promise<boolean>}
+ */
+function confirm(message, options = {}) {
+    if (window.AppLoading && typeof window.AppLoading.forceHide === 'function') {
+        window.AppLoading.forceHide();
+    }
+
+    if (mode === 'confirm' && confirmResolver) {
+        resolveConfirm(false);
+    }
+
+    const el = ensureDialog();
+    const text = (message && String(message).trim()) || t('defaultConfirm');
+
+    mode = 'confirm';
+    pendingOnClose = null;
+    el.dataset.type = 'warning';
+    el.dataset.mode = 'confirm';
+    iconEl.innerHTML = ICONS.warning;
+    titleEl.textContent = options.title || t('warning');
+    messageEl.textContent = text;
+    okBtn.textContent = options.confirmText || t('confirm');
+    cancelBtn.textContent = options.cancelText || t('cancel');
+    cancelBtn.hidden = false;
+
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    el.classList.add('is-open');
+    el.setAttribute('aria-hidden', 'false');
+    document.documentElement.classList.add('app-dialog-open');
+    document.addEventListener('keydown', onKeydown);
+    okBtn.focus();
+
+    return new Promise((resolve) => {
+        confirmResolver = resolve;
+    });
 }
 
 function hide() {
@@ -125,9 +212,15 @@ function hide() {
     }
     previousFocus = null;
 
+    const wasAlert = mode === 'alert';
+    mode = 'alert';
+    if (cancelBtn) {
+        cancelBtn.hidden = true;
+    }
+
     const cb = pendingOnClose;
     pendingOnClose = null;
-    if (cb) {
+    if (wasAlert && cb) {
         cb();
     }
 }
@@ -184,7 +277,7 @@ function bridgeNativeDialogs() {
 
 function init() {
     ensureDialog();
-    window.AppDialog = { show, hide, success, error, warning };
+    window.AppDialog = { show, hide, success, error, warning, confirm };
     bridgeNativeDialogs();
     readFlash();
 }
@@ -195,4 +288,4 @@ if (document.readyState === 'loading') {
     init();
 }
 
-export { show, hide, success, error, warning };
+export { show, hide, success, error, warning, confirm };

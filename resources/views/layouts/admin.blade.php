@@ -29,6 +29,7 @@
                     ['services_catalog.view', 'admin.services.index', __('Services'), ['admin.services.*']],
                     ['portfolio.view', 'admin.portfolio-projects.index', __('Portfolio'), ['admin.portfolio-projects.*']],
                     ['settings.view', 'admin.settings.edit', __('Settings'), ['admin.settings.*']],
+                    ['settings.view', 'admin.setup.index', __('Setup'), ['admin.setup.*']],
                 ];
             @endphp
             @foreach ($links as [$permission, $route, $label, $activePatterns])
