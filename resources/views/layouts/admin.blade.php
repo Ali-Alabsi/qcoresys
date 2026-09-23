@@ -9,33 +9,29 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-slate-50" x-data="{menu:false}">
+@php
+    $navSections = \App\Support\AdminNavigation::visibleSections(auth()->user());
+    $homeUrl = \App\Support\AdminNavigation::homeUrl(auth()->user());
+@endphp
 <div class="min-h-screen lg:flex">
-    <aside class="fixed inset-y-0 z-30 w-72 bg-brand-navy text-white transition lg:static lg:translate-x-0" :class="menu ? 'translate-x-0' : '{{ app()->getLocale() === 'ar' ? 'translate-x-full' : '-translate-x-full' }}'">
-        <div class="flex h-20 items-center justify-between border-b border-white/10 px-6">
-            <a href="{{ route('admin.dashboard') }}" class="text-xl font-bold">QCore<span class="text-brand-cyan">Sys</span></a>
+    <aside
+        class="z-30 flex w-72 shrink-0 flex-col bg-brand-navy text-white transition max-lg:fixed max-lg:inset-y-0 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+        :class="menu ? 'translate-x-0' : '{{ app()->getLocale() === 'ar' ? 'max-lg:translate-x-full' : 'max-lg:-translate-x-full' }}'"
+    >
+        <div class="flex h-20 shrink-0 items-center justify-between border-b border-white/10 px-6">
+            <a href="{{ $homeUrl }}" class="text-xl font-bold">QCore<span class="text-brand-cyan">Sys</span></a>
             <button class="lg:hidden" @click="menu=false">✕</button>
         </div>
-        <nav class="space-y-1 p-4 text-sm">
-            @php
-                $links = [
-                    ['customers.view', 'admin.dashboard', __('Dashboard'), ['admin.dashboard']],
-                    ['customers.view', 'admin.customers.index', __('Customers'), ['admin.customers.*']],
-                    ['customer_requests.view', 'admin.customer-requests.index', __('Requests'), ['admin.customer-requests.*']],
-                    ['quotations.view', 'admin.quotations.index', __('Quotations'), ['admin.quotations.*']],
-                    ['invoices.view', 'admin.invoices.index', __('Invoices'), ['admin.invoices.*']],
-                    ['payments.view', 'admin.payments.index', __('Payments'), ['admin.payments.*']],
-                    ['accounts.view', 'admin.accounts.index', __('Accounts'), ['admin.accounts.*']],
-                    ['journals.view', 'admin.journals.index', __('Financial operations'), ['admin.journals.index', 'admin.journals.show', 'admin.journals.create']],
-                    ['services_catalog.view', 'admin.services.index', __('Services'), ['admin.services.*']],
-                    ['portfolio.view', 'admin.portfolio-projects.index', __('Portfolio'), ['admin.portfolio-projects.*']],
-                    ['settings.view', 'admin.settings.edit', __('Settings'), ['admin.settings.*']],
-                    ['settings.view', 'admin.setup.index', __('Setup'), ['admin.setup.*']],
-                ];
-            @endphp
-            @foreach ($links as [$permission, $route, $label, $activePatterns])
-                @if (auth()->user()->hasPermission($permission))
-                    <a href="{{ route($route) }}" class="block rounded-xl px-4 py-3 {{ request()->routeIs(...$activePatterns) ? 'bg-brand-cyan text-brand-navy' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">{{ $label }}</a>
-                @endif
+        <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 text-sm">
+            @foreach ($navSections as $section)
+                <div>
+                    <div class="mb-1 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ $section['label'] }}</div>
+                    <div class="space-y-1">
+                        @foreach ($section['links'] as $link)
+                            <a href="{{ route($link['route']) }}" class="block rounded-xl px-4 py-3 {{ request()->routeIs(...$link['active']) ? 'bg-brand-cyan text-brand-navy' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">{{ $link['label'] }}</a>
+                        @endforeach
+                    </div>
+                </div>
             @endforeach
         </nav>
     </aside>

@@ -174,6 +174,11 @@
         <label for="entryDesc">البيان</label>
         <input type="text" class="input-public !px-2 !py-1.5 text-sm" id="entryDesc" placeholder="وصف القيد..." required>
       </div>
+      <div class="field">
+        <label for="entryAttachments">المؤيدات <span class="text-red-600">*</span></label>
+        <input type="file" class="input-public !px-2 !py-1.5 text-sm" id="entryAttachments" name="attachments[]" accept=".pdf,.png,.jpg,.jpeg" multiple required>
+        <p class="mt-1 text-[10px] text-slate-500">PDF أو صورة — ملف واحد على الأقل، حتى 5 ملفات (5MB لكل ملف)</p>
+      </div>
 
       <div>
         <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:#475569">المدين / الدائن</div>
@@ -339,25 +344,42 @@
         return;
       }
 
+      const attachmentInput = document.getElementById('entryAttachments');
+      if (!attachmentInput.files || attachmentInput.files.length < 1) {
+        notify('warning', 'أرفق مؤيداً واحداً على الأقل (PDF أو صورة).');
+        return;
+      }
+      if (attachmentInput.files.length > 5) {
+        notify('warning', 'حد أقصى 5 ملفات.');
+        return;
+      }
+
       const btn = document.getElementById('btnPostEntry');
       btn.disabled = true;
       const original = btn.innerHTML;
       btn.innerHTML = '...';
 
+      const formData = new FormData();
+      formData.append('entry_date', document.getElementById('entryDate').value);
+      formData.append('description', document.getElementById('entryDesc').value);
+      lines.forEach((line, index) => {
+        formData.append(`lines[${index}][account_code]`, line.account_code);
+        formData.append(`lines[${index}][debit]`, String(line.debit));
+        formData.append(`lines[${index}][credit]`, String(line.credit));
+      });
+      Array.from(attachmentInput.files).forEach((file) => {
+        formData.append('attachments[]', file);
+      });
+
       try {
         const response = await fetch(config.storeUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             'Accept': 'application/json',
             'X-CSRF-TOKEN': config.csrf,
             'X-Requested-With': 'XMLHttpRequest',
           },
-          body: JSON.stringify({
-            entry_date: document.getElementById('entryDate').value,
-            description: document.getElementById('entryDesc').value,
-            lines,
-          }),
+          body: formData,
         });
 
         let data = {};

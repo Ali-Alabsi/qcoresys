@@ -6,10 +6,13 @@ use App\Enums\AccountType;
 use App\Enums\JournalStatus;
 use App\Enums\NormalBalance;
 use App\Models\Account;
+use App\Models\Currency;
 use App\Models\JournalEntry;
 use App\Models\User;
+use App\Services\JournalEntryService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class AccountingWorkstationTest extends TestCase
@@ -25,6 +28,22 @@ class AccountingWorkstationTest extends TestCase
         $this->admin = User::query()->where('email', 'admin@qcoresys.com')->firstOrFail();
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function postJournal(array $payload)
+    {
+        $payload['attachments'] = $payload['attachments'] ?? [
+            UploadedFile::fake()->image('voucher.jpg'),
+        ];
+
+        return $this->actingAs($this->admin)
+            ->post(route('admin.journals.store'), $payload, [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ]);
+    }
+
     public function test_accounting_pages_render_and_journal_opens_as_popup(): void
     {
         $this->actingAs($this->admin)
@@ -35,7 +54,9 @@ class AccountingWorkstationTest extends TestCase
             ->get(route('admin.journals.index', ['new' => 1]))
             ->assertOk()
             ->assertSee('سجل القيود المرحلة', false)
-            ->assertSee('قيد محاسبي جديد', false);
+            ->assertSee('قيد محاسبي جديد', false)
+            ->assertSee('المؤيدات', false)
+            ->assertSee('id="entryAttachments"', false);
 
         $accountsIndex = $this->actingAs($this->admin)
             ->get(route('admin.accounts.index', ['per_page' => 50]))
@@ -208,8 +229,7 @@ class AccountingWorkstationTest extends TestCase
         $cash = Account::query()->where('account_code', '111101')->firstOrFail();
         $capital = Account::query()->where('account_code', '3111')->firstOrFail();
 
-        $response = $this->actingAs($this->admin)
-            ->postJson(route('admin.journals.store'), [
+        $response = $this->postJournal([
                 'entry_date' => now()->toDateString(),
                 'description' => 'تغذية رأس المال نقداً',
                 'lines' => [
@@ -242,8 +262,7 @@ class AccountingWorkstationTest extends TestCase
 
     public function test_unbalanced_journal_is_rejected(): void
     {
-        $this->actingAs($this->admin)
-            ->postJson(route('admin.journals.store'), [
+        $this->postJournal([
                 'entry_date' => now()->toDateString(),
                 'description' => 'قيد غير متوازن',
                 'lines' => [
@@ -261,8 +280,7 @@ class AccountingWorkstationTest extends TestCase
         $cash = Account::query()->where('account_code', '111101')->firstOrFail();
         $capital = Account::query()->where('account_code', '3111')->firstOrFail();
 
-        $this->actingAs($this->admin)
-            ->postJson(route('admin.journals.store'), [
+        $this->postJournal([
                 'entry_date' => now()->toDateString(),
                 'description' => 'قيد لكشف الحساب',
                 'lines' => [
@@ -337,8 +355,7 @@ class AccountingWorkstationTest extends TestCase
         $capital = Account::query()->where('account_code', '3111')->firstOrFail();
 
         for ($i = 1; $i <= 12; $i++) {
-            $this->actingAs($this->admin)
-                ->postJson(route('admin.journals.store'), [
+            $this->postJournal([
                     'entry_date' => now()->toDateString(),
                     'description' => 'قيد صفحة '.$i,
                     'lines' => [
@@ -385,5 +402,104 @@ class AccountingWorkstationTest extends TestCase
         $page2->assertSee('120.00', false);
 
         $this->assertNotNull($capital);
+    }
+
+    public function test_reverse_journal_via_http_creates_balancing_entry(): void
+    {
+        $this->postJournal([
+                'entry_date' => now()->toDateString(),
+                'description' => 'قيد للعكس',
+                'lines' => [
+                    ['account_code' => '111101', 'debit' => 300, 'credit' => 0],
+                    ['account_code' => '3111', 'debit' => 0, 'credit' => 300],
+                ],
+            ])
+            ->assertOk();
+
+        $entry = JournalEntry::query()->latest('id')->firstOrFail();
+        $this->assertSame(JournalStatus::Posted, $entry->status);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.journals.show', $entry))
+            ->assertOk()
+            ->assertSee(__('Reverse journal'), false);
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('admin.journals.reverse', $entry));
+
+        $entry->refresh();
+        $reversing = JournalEntry::query()
+            ->where('reversed_entry_id', $entry->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $response->assertRedirect(route('admin.journals.show', $reversing));
+        $this->assertTrue($entry->is_reversed);
+        $this->assertSame(JournalStatus::Posted, $entry->status);
+        $this->assertSame(JournalStatus::Posted, $reversing->status);
+        $this->assertEqualsWithDelta((float) $reversing->total_debit, (float) $reversing->total_credit, 0.01);
+
+        $cash = Account::query()->where('account_code', '111101')->firstOrFail();
+        $capital = Account::query()->where('account_code', '3111')->firstOrFail();
+        $this->assertEqualsWithDelta(0.0, (float) $cash->fresh()->current_balance, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $capital->fresh()->current_balance, 0.01);
+
+        $index = $this->actingAs($this->admin)
+            ->get(route('admin.journals.index'))
+            ->assertOk();
+        $index->assertSee($entry->entry_no, false);
+        $index->assertSee($reversing->entry_no, false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.journals.show', $entry))
+            ->assertOk()
+            ->assertSee(__('Journal reversed (status)'), false)
+            ->assertDontSee(__('Reverse journal'), false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.journals.show', $reversing))
+            ->assertOk()
+            ->assertSee(__('Reversing journal (label)'), false)
+            ->assertDontSee(__('Reverse journal'), false);
+
+        $originalDebitLine = $entry->lines()->where('debit', '>', 0)->firstOrFail();
+        $reversingCreditLine = $reversing->lines()->where('account_id', $originalDebitLine->account_id)->firstOrFail();
+        $this->assertEqualsWithDelta((float) $originalDebitLine->debit, (float) $reversingCreditLine->credit, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $reversingCreditLine->debit, 0.01);
+    }
+
+    public function test_reverse_journal_rejects_draft_and_already_reversed(): void
+    {
+        $service = app(JournalEntryService::class);
+        $cash = Account::query()->where('account_code', '111101')->firstOrFail();
+        $capital = Account::query()->where('account_code', '3111')->firstOrFail();
+        $currencyId = Currency::query()->base()->firstOrFail()->id;
+
+        $draft = $service->create([
+            'entry_date' => now()->toDateString(),
+            'description' => 'مسودة للعكس',
+            'currency_id' => $currencyId,
+            'exchange_rate' => 1,
+        ], [
+            ['account_id' => $cash->id, 'debit' => 100, 'credit' => 0],
+            ['account_id' => $capital->id, 'debit' => 0, 'credit' => 100],
+        ], $this->admin->id);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.journals.show', $draft))
+            ->post(route('admin.journals.reverse', $draft))
+            ->assertRedirect(route('admin.journals.show', $draft))
+            ->assertSessionHasErrors('journal');
+
+        $posted = $service->post($draft, $this->admin->id);
+        $reversing = $service->reverse($posted, $this->admin->id);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.journals.show', $posted))
+            ->post(route('admin.journals.reverse', $posted))
+            ->assertRedirect(route('admin.journals.show', $posted))
+            ->assertSessionHasErrors('journal');
+
+        $this->assertSame(JournalStatus::Posted, $reversing->fresh()->status);
     }
 }

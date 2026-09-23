@@ -18,8 +18,8 @@
 
 <section
     @class([
-        'relative overflow-hidden bg-brand-navy text-white',
-        'bg-cover bg-no-repeat bg-right rtl:bg-left' => $heroImageUrl,
+        'relative flex min-h-[calc(100dvh-4rem)] items-center overflow-hidden bg-brand-navy text-white lg:min-h-[calc(100dvh-5rem)]',
+        'bg-cover bg-center bg-no-repeat' => $heroImageUrl,
     ])
     @if ($heroImageUrl)
         style="background-image: url('{{ $heroImageUrl }}');"
@@ -30,7 +30,7 @@
     @else
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,210,255,0.25),transparent_45%)]"></div>
     @endif
-    <div class="container-public section-padding relative">
+    <div class="container-public section-padding relative w-full">
         <div class="max-w-3xl">
             <p class="mb-4 inline-flex rounded-full border border-brand-cyan/30 bg-brand-cyan/10 px-3 py-1 text-xs font-semibold text-brand-cyan">{{ __('Services') }}</p>
             <h1 class="text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">{{ $heroTitle }}</h1>

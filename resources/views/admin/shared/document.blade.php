@@ -60,7 +60,14 @@
             <form method="POST" action="{{ route('admin.quotations.send', $record) }}">@csrf<button class="btn-navy !px-4 !py-2">{{ __('Send') }}</button></form>
         @endif
         @if($canPost && auth()->user()->hasPermission('invoices.post'))
-            <form method="POST" action="{{ route('admin.invoices.post', $record) }}">@csrf<button class="btn-navy !px-4 !py-2">{{ __('Post') }}</button></form>
+            <form method="POST" action="{{ route('admin.invoices.post', $record) }}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                @csrf
+                <div>
+                    <label for="invoice_vouchers" class="mb-1 block text-xs font-semibold text-slate-600">{{ __('Supporting documents') }} <span class="text-red-600">*</span></label>
+                    <input id="invoice_vouchers" type="file" name="attachments[]" accept=".pdf,.png,.jpg,.jpeg" multiple required class="block max-w-[14rem] text-xs">
+                </div>
+                <button class="btn-navy !px-4 !py-2">{{ __('Post') }}</button>
+            </form>
         @endif
         @if($canRecordPayment)
             <a class="btn-navy !px-4 !py-2" href="{{ route('admin.payments.index', ['new' => 1, 'invoice_id' => $record->id]) }}">{{ __('Record payment') }}</a>

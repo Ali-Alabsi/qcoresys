@@ -47,6 +47,10 @@
                             $canEditRecord = $status === \App\Enums\InvoiceStatus::Draft;
                             $canApproveRecord = $status === \App\Enums\InvoiceStatus::Draft;
                             $canPostRecord = $status === \App\Enums\InvoiceStatus::Approved;
+                        } elseif ($status instanceof \App\Enums\ExpenseStatus) {
+                            $canEditRecord = $status === \App\Enums\ExpenseStatus::Draft;
+                            $canApproveRecord = $status === \App\Enums\ExpenseStatus::Draft;
+                            $canPostRecord = $status === \App\Enums\ExpenseStatus::Approved;
                         }
                     @endphp
                     <div class="flex flex-row flex-nowrap items-center justify-end gap-3">
@@ -60,7 +64,11 @@
                             <form class="inline" method="POST" action="{{ route($routeBase.'.approve', $record) }}">@csrf<button type="submit" class="font-semibold text-cyan-600">{{ __('Approve') }}</button></form>
                         @endif
                         @if($canPostRecord && Route::has($routeBase.'.post') && auth()->user()->hasPermission($permissionModule.'.post'))
-                            <form class="inline" method="POST" action="{{ route($routeBase.'.post', $record) }}">@csrf<button type="submit" class="font-semibold text-brand-navy">{{ __('Post') }}</button></form>
+                            <form class="inline-flex flex-col items-end gap-1" method="POST" action="{{ route($routeBase.'.post', $record) }}" enctype="multipart/form-data">
+                                @csrf
+                                <input type="file" name="attachments[]" accept=".pdf,.png,.jpg,.jpeg" multiple required class="max-w-[10rem] text-[10px]" title="{{ __('Supporting documents') }}">
+                                <button type="submit" class="font-semibold text-brand-navy">{{ __('Post') }}</button>
+                            </form>
                         @endif
                     </div>
                 </td>

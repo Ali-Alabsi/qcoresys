@@ -66,25 +66,69 @@ class JournalAttachmentTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.journals.attachments.download', [$entry, $attachment]))
             ->assertOk();
+
+        $this->actingAs($admin)
+            ->get(route('admin.journals.attachments.view', [$entry, $attachment]))
+            ->assertOk();
     }
 
-    public function test_workstation_posts_journal_via_json(): void
+    public function test_workstation_rejects_journal_without_voucher(): void
     {
         $admin = User::query()->where('email', 'admin@qcoresys.com')->firstOrFail();
 
         $this->actingAs($admin)
-            ->postJson(route('admin.journals.store'), [
+            ->post(route('admin.journals.store'), [
+                'entry_date' => now()->toDateString(),
+                'description' => 'Missing voucher',
+                'lines' => [
+                    ['account_code' => '111101', 'debit' => 25, 'credit' => 0],
+                    ['account_code' => '3111', 'debit' => 0, 'credit' => 25],
+                ],
+            ], [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['attachments']);
+
+        $this->assertFalse(
+            JournalEntry::query()->where('description', 'Missing voucher')->exists()
+        );
+    }
+
+    public function test_workstation_posts_journal_with_voucher(): void
+    {
+        Storage::fake('local');
+
+        $admin = User::query()->where('email', 'admin@qcoresys.com')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.journals.store'), [
                 'entry_date' => now()->toDateString(),
                 'description' => 'JSON post capital',
                 'lines' => [
                     ['account_code' => '111101', 'debit' => 25, 'credit' => 0],
                     ['account_code' => '3111', 'debit' => 0, 'credit' => 25],
                 ],
+                'attachments' => [
+                    UploadedFile::fake()->image('voucher.jpg'),
+                ],
+            ], [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
             ])
             ->assertOk();
 
-        $this->assertTrue(
-            JournalEntry::query()->where('description', 'JSON post capital')->posted()->exists()
-        );
+        $entry = JournalEntry::query()->where('description', 'JSON post capital')->posted()->first();
+        $this->assertNotNull($entry);
+        $this->assertTrue($entry->attachments()->exists());
+        Storage::disk('local')->assertExists($entry->attachments()->first()->file_path);
+
+        $this->actingAs($admin)
+            ->get(route('admin.journals.show', $entry))
+            ->assertOk()
+            ->assertSee(__('Supporting documents'), false)
+            ->assertSee(__('View'), false)
+            ->assertSee(__('Download'), false);
     }
 }

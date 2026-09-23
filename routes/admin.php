@@ -14,7 +14,7 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware('auth')->group(function () {
         Route::post('logout', [AuthController::class, 'logout'])->name('logout');
-        Route::get('/', [PlatformController::class, 'dashboard'])->middleware('permission:customers.view')->name('dashboard');
+        Route::get('/', [PlatformController::class, 'dashboard'])->middleware('permission:dashboard.view')->name('dashboard');
 
         Route::get('customers', [PlatformController::class, 'customersIndex'])->middleware('permission:customers.view')->name('customers.index');
         Route::get('customers/create', [PlatformController::class, 'customersCreate'])->middleware('permission:customers.create')->name('customers.create');
@@ -55,6 +55,12 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::post('payments', [PlatformController::class, 'paymentsStore'])->middleware('permission:payments.create')->name('payments.store');
         Route::post('payments/{payment}/post', [PlatformController::class, 'paymentPost'])->middleware('permission:payments.post')->name('payments.post');
 
+        Route::get('expenses', [PlatformController::class, 'expensesIndex'])->middleware('permission:expenses.view')->name('expenses.index');
+        Route::get('expenses/create', [PlatformController::class, 'expensesCreate'])->middleware('permission:expenses.create')->name('expenses.create');
+        Route::post('expenses', [PlatformController::class, 'expensesStore'])->middleware('permission:expenses.create')->name('expenses.store');
+        Route::post('expenses/{expense}/approve', [PlatformController::class, 'expenseApprove'])->middleware('permission:expenses.approve')->name('expenses.approve');
+        Route::post('expenses/{expense}/post', [PlatformController::class, 'expensePost'])->middleware('permission:expenses.post')->name('expenses.post');
+
         Route::get('accounts', [PlatformController::class, 'accountsIndex'])->middleware('permission:accounts.view')->name('accounts.index');
         Route::get('accounts/create', [PlatformController::class, 'accountsCreate'])->middleware('permission:accounts.create')->name('accounts.create');
         Route::post('accounts', [PlatformController::class, 'accountsStore'])->middleware('permission:accounts.create')->name('accounts.store');
@@ -66,8 +72,10 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::get('journals/create', [PlatformController::class, 'journalsCreate'])->middleware('permission:journals.create')->name('journals.create');
         Route::post('journals', [PlatformController::class, 'journalsStore'])->middleware('permission:journals.create')->name('journals.store');
         Route::get('journals/{journal}', [PlatformController::class, 'journalsShow'])->middleware('permission:journals.view')->name('journals.show');
+        Route::get('journals/{journal}/attachments/{attachment}/view', [PlatformController::class, 'journalAttachmentView'])->middleware('permission:journals.view')->name('journals.attachments.view');
         Route::get('journals/{journal}/attachments/{attachment}', [PlatformController::class, 'journalAttachmentDownload'])->middleware('permission:journals.view')->name('journals.attachments.download');
         Route::post('journals/{journal}/post', [PlatformController::class, 'journalPost'])->middleware('permission:journals.post')->name('journals.post');
+        Route::post('journals/{journal}/reverse', [PlatformController::class, 'journalReverse'])->middleware('permission:journals.reverse')->name('journals.reverse');
 
         Route::get('services', [PlatformController::class, 'servicesIndex'])->middleware('permission:services_catalog.view')->name('services.index');
         Route::get('services/{service}/edit', [PlatformController::class, 'servicesEdit'])->middleware('permission:services_catalog.update')->name('services.edit');
@@ -78,6 +86,14 @@ Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
         Route::post('portfolio-projects', [PlatformController::class, 'portfolioStore'])->middleware('permission:portfolio.create')->name('portfolio-projects.store');
         Route::get('portfolio-projects/{portfolioProject}/edit', [PlatformController::class, 'portfolioEdit'])->middleware('permission:portfolio.update')->name('portfolio-projects.edit');
         Route::put('portfolio-projects/{portfolioProject}', [PlatformController::class, 'portfolioUpdate'])->middleware('permission:portfolio.update')->name('portfolio-projects.update');
+
+        Route::get('users', [PlatformController::class, 'usersIndex'])->middleware('permission:users.view')->name('users.index');
+        Route::get('users/create', [PlatformController::class, 'usersCreate'])->middleware('permission:users.create')->name('users.create');
+        Route::post('users', [PlatformController::class, 'usersStore'])->middleware('permission:users.create')->name('users.store');
+        Route::get('users/{user}', [PlatformController::class, 'usersShow'])->middleware('permission:users.view')->name('users.show');
+        Route::get('users/{user}/edit', [PlatformController::class, 'usersEdit'])->middleware('permission:users.update')->name('users.edit');
+        Route::put('users/{user}', [PlatformController::class, 'usersUpdate'])->middleware('permission:users.update')->name('users.update');
+        Route::delete('users/{user}', [PlatformController::class, 'usersDestroy'])->middleware('permission:users.delete')->name('users.destroy');
 
         Route::get('settings', [PlatformController::class, 'settingsEdit'])->middleware('permission:settings.view')->name('settings.edit');
         Route::put('settings', [PlatformController::class, 'settingsUpdate'])->middleware('permission:settings.update')->name('settings.update');

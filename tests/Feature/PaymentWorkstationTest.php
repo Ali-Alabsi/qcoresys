@@ -15,6 +15,7 @@ use App\Services\CustomerService;
 use App\Services\InvoiceService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class PaymentWorkstationTest extends TestCase
@@ -34,6 +35,18 @@ class PaymentWorkstationTest extends TestCase
         $this->admin = User::query()->where('email', 'admin@qcoresys.com')->firstOrFail();
         $this->currency = Currency::query()->where('code', 'USD')->firstOrFail();
         $this->bankAccount = Account::query()->where('account_code', '111102')->firstOrFail();
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function paymentPayload(array $payload): array
+    {
+        $payload['attachments'] = $payload['attachments'] ?? [
+            UploadedFile::fake()->image('receipt.jpg'),
+        ];
+
+        return $payload;
     }
 
     public function test_payment_create_opens_as_popup_on_index(): void
@@ -57,20 +70,21 @@ class PaymentWorkstationTest extends TestCase
         $invoice = $this->createPostedInvoice(1500);
 
         $this->actingAs($this->admin)
-            ->post(route('admin.payments.store'), [
+            ->post(route('admin.payments.store'), $this->paymentPayload([
                 'invoice_id' => $invoice->id,
                 'account_id' => $this->bankAccount->id,
                 'payment_method' => PaymentMethod::BankTransfer->value,
                 'payment_date' => now()->toDateString(),
                 'amount' => 1500,
                 'reference_no' => 'TRX-FULL',
-            ])
+            ]))
             ->assertRedirect(route('admin.payments.index'));
 
         $payment = Payment::query()->latest('id')->first();
         $this->assertNotNull($payment);
         $this->assertSame(PaymentStatus::Posted, $payment->status);
         $this->assertNotNull($payment->journal_entry_id);
+        $this->assertTrue($payment->journalEntry->attachments()->exists());
         $this->assertEquals(1500, (float) $payment->amount);
         $this->assertSame($invoice->id, $payment->invoice_id);
 
@@ -84,13 +98,13 @@ class PaymentWorkstationTest extends TestCase
         $invoice = $this->createPostedInvoice(200);
 
         $this->actingAs($this->admin)
-            ->post(route('admin.payments.store'), [
+            ->post(route('admin.payments.store'), $this->paymentPayload([
                 'invoice_id' => $invoice->id,
                 'account_id' => $this->bankAccount->id,
                 'payment_method' => PaymentMethod::Cash->value,
                 'payment_date' => now()->toDateString(),
                 'amount' => 100,
-            ])
+            ]))
             ->assertRedirect(route('admin.payments.index'));
 
         $payment = Payment::query()->latest('id')->first();
@@ -109,13 +123,13 @@ class PaymentWorkstationTest extends TestCase
 
         $this->actingAs($this->admin)
             ->from(route('admin.payments.index', ['new' => 1]))
-            ->post(route('admin.payments.store'), [
+            ->post(route('admin.payments.store'), $this->paymentPayload([
                 'invoice_id' => $invoice->id,
                 'account_id' => $this->bankAccount->id,
                 'payment_method' => PaymentMethod::BankTransfer->value,
                 'payment_date' => now()->toDateString(),
                 'amount' => 300,
-            ])
+            ]))
             ->assertRedirect(route('admin.payments.index', ['new' => 1]))
             ->assertSessionHasErrors(['amount']);
 
@@ -136,13 +150,13 @@ class PaymentWorkstationTest extends TestCase
 
         $this->actingAs($this->admin)
             ->from(route('admin.payments.index', ['new' => 1]))
-            ->post(route('admin.payments.store'), [
+            ->post(route('admin.payments.store'), $this->paymentPayload([
                 'invoice_id' => $invoice->id,
                 'account_id' => $nonDepositAccount->id,
                 'payment_method' => PaymentMethod::BankTransfer->value,
                 'payment_date' => now()->toDateString(),
                 'amount' => 200,
-            ])
+            ]))
             ->assertRedirect(route('admin.payments.index', ['new' => 1]))
             ->assertSessionHasErrors(['account_id']);
 
@@ -161,7 +175,7 @@ class PaymentWorkstationTest extends TestCase
                 'amount' => '',
             ])
             ->assertRedirect(route('admin.payments.index', ['new' => 1]))
-            ->assertSessionHasErrors(['invoice_id', 'account_id', 'payment_method', 'payment_date', 'amount']);
+            ->assertSessionHasErrors(['invoice_id', 'account_id', 'payment_method', 'payment_date', 'amount', 'attachments']);
 
         $this->actingAs($this->admin)
             ->get(route('admin.payments.index', ['new' => 1]))

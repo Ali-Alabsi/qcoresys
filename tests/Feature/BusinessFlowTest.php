@@ -345,7 +345,9 @@ class BusinessFlowTest extends TestCase
         $this->assertSame(JournalStatus::Posted, $reversing->status);
         $this->assertEquals((float) $reversing->total_debit, (float) $reversing->total_credit);
         $this->assertTrue($entry->fresh()->is_reversed);
-        $this->assertSame(JournalStatus::Reversed, $entry->fresh()->status);
+        $this->assertSame(JournalStatus::Posted, $entry->fresh()->status);
+        $this->assertEqualsWithDelta(0.0, (float) $cash->fresh()->current_balance, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $revenue->fresh()->current_balance, 0.01);
     }
 
     public function test_document_numbers_are_unique_and_sequential(): void

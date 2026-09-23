@@ -12,6 +12,7 @@ class RolePermissionSeeder extends Seeder
      * @var array<string, list<string>>
      */
     private array $modules = [
+        'dashboard' => ['view'],
         'customers' => ['view', 'create', 'update', 'delete'],
         'customer_requests' => ['view', 'create', 'update', 'delete'],
         'consultations' => ['view', 'create', 'update', 'delete'],
@@ -87,7 +88,7 @@ class RolePermissionSeeder extends Seeder
             'MANAGEMENT' => [
                 'name' => 'Management',
                 'description' => 'Executive oversight and approvals',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customer_requests.view', 'consultations.view',
                     'proposals.view', 'proposals.approve', 'proposals.send',
                     'quotations.view', 'quotations.approve', 'quotations.send',
@@ -103,7 +104,7 @@ class RolePermissionSeeder extends Seeder
             'SALES_MANAGER' => [
                 'name' => 'Sales Manager',
                 'description' => 'Sales pipeline and customer relationship management',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customers.create', 'customers.update',
                     'customer_requests.view', 'customer_requests.create', 'customer_requests.update', 'customer_requests.delete',
                     'consultations.view', 'consultations.create', 'consultations.update',
@@ -118,7 +119,7 @@ class RolePermissionSeeder extends Seeder
             'ACCOUNT_MANAGER' => [
                 'name' => 'Account Manager',
                 'description' => 'Customer account and delivery oversight',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customers.update',
                     'customer_requests.view', 'customer_requests.create', 'customer_requests.update', 'customer_requests.delete',
                     'consultations.view', 'consultations.create', 'consultations.update',
@@ -130,7 +131,7 @@ class RolePermissionSeeder extends Seeder
             'SALES' => [
                 'name' => 'Sales',
                 'description' => 'Sales representative',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customers.create', 'customers.update',
                     'customer_requests.view', 'customer_requests.create', 'customer_requests.update',
                     'consultations.view', 'consultations.create',
@@ -138,13 +139,12 @@ class RolePermissionSeeder extends Seeder
                     'quotations.view', 'quotations.create', 'quotations.update',
                     'contracts.view', 'contracts.create',
                     'projects.view',
-                    'invoices.view',
                 ]),
             ],
             'CONSULTANT' => [
                 'name' => 'Consultant',
                 'description' => 'Technical consultant',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customer_requests.view',
                     'consultations.view', 'consultations.create', 'consultations.update',
                     'proposals.view', 'proposals.create', 'proposals.update',
@@ -155,18 +155,18 @@ class RolePermissionSeeder extends Seeder
             'PROJECT_MANAGER' => [
                 'name' => 'Project Manager',
                 'description' => 'Project delivery and team management',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customer_requests.view',
                     'consultations.view', 'proposals.view', 'quotations.view', 'contracts.view',
                     'projects.view', 'projects.create', 'projects.update', 'projects.delete',
                     'expenses.view', 'expenses.create',
-                    'invoices.view', 'reports.view',
+                    'reports.view',
                 ]),
             ],
             'DEVELOPER' => [
                 'name' => 'Developer',
                 'description' => 'Software developer',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customer_requests.view',
                     'consultations.view', 'projects.view', 'projects.update',
                 ]),
@@ -174,33 +174,35 @@ class RolePermissionSeeder extends Seeder
             'ACCOUNTING_MANAGER' => [
                 'name' => 'Accounting Manager',
                 'description' => 'Finance and accounting oversight',
-                'permissions' => $this->codes($permissions, [
-                    'customers.view', 'vendors.view', 'vendors.create', 'vendors.update',
+                'permissions' => $this->withDashboard($permissions, [
+                    'customers.view',
+                    'vendors.view', 'vendors.create', 'vendors.update',
                     'accounts.view', 'accounts.create', 'accounts.update',
                     'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete', 'invoices.approve', 'invoices.post',
                     'payments.view', 'payments.create', 'payments.update', 'payments.delete', 'payments.post',
                     'expenses.view', 'expenses.create', 'expenses.update', 'expenses.delete', 'expenses.approve', 'expenses.post',
                     'journals.view', 'journals.create', 'journals.update', 'journals.delete', 'journals.post', 'journals.reverse',
-                    'projects.view', 'reports.view', 'settings.view',
+                    'reports.view', 'settings.view',
                 ]),
             ],
             'ACCOUNTANT' => [
                 'name' => 'Accountant',
                 'description' => 'Accounting operations',
-                'permissions' => $this->codes($permissions, [
-                    'customers.view', 'vendors.view',
+                'permissions' => $this->withDashboard($permissions, [
+                    'customers.view',
+                    'vendors.view',
                     'accounts.view',
                     'invoices.view', 'invoices.create', 'invoices.update', 'invoices.approve', 'invoices.post',
                     'payments.view', 'payments.create', 'payments.update', 'payments.post',
                     'expenses.view', 'expenses.create', 'expenses.update', 'expenses.approve', 'expenses.post',
                     'journals.view', 'journals.create', 'journals.update', 'journals.post',
-                    'projects.view', 'reports.view',
+                    'reports.view',
                 ]),
             ],
             'EMPLOYEE' => [
                 'name' => 'Employee',
                 'description' => 'General employee access',
-                'permissions' => $this->codes($permissions, [
+                'permissions' => $this->withDashboard($permissions, [
                     'customers.view', 'customer_requests.view',
                     'consultations.view', 'projects.view',
                     'expenses.view', 'expenses.create',
@@ -232,6 +234,19 @@ class RolePermissionSeeder extends Seeder
 
             $role->permissions()->sync($syncData);
         }
+    }
+
+    /**
+     * @param  array<string, Permission>  $permissions
+     * @param  list<string>  $codes
+     * @return list<string>
+     */
+    private function withDashboard(array $permissions, array $codes): array
+    {
+        return $this->codes($permissions, array_values(array_unique([
+            'dashboard.view',
+            ...$codes,
+        ])));
     }
 
     /**

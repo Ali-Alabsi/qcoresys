@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\AdminNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,12 +30,13 @@ class AuthController extends Controller
         $request->session()->regenerate();
         if (! $request->user()->roles()->exists()) {
             Auth::logout();
+
             return back()->withErrors(['email' => __('This account is not a staff account.')]);
         }
 
         $request->user()->update(['last_login_at' => now()]);
 
-        return redirect()->intended(route('admin.dashboard'));
+        return redirect()->intended(AdminNavigation::homeUrl($request->user()));
     }
 
     public function logout(Request $request): RedirectResponse

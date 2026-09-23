@@ -192,7 +192,6 @@ class JournalEntryService
 
             $entry->update([
                 'is_reversed' => true,
-                'status' => JournalStatus::Reversed,
             ]);
 
             $this->auditService->logModelEvent($entry->fresh(), AuditAction::JournalReverse);

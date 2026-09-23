@@ -70,7 +70,7 @@
     </div>
     <div class="mt-6">
         <label class="label-public" for="attachments">{{ __('Attachments') }}</label>
-        <input id="attachments" class="input-public" type="file" name="attachments[]" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip">
+        <input id="attachments" class="input-public" type="file" name="attachments[]" multiple accept=".pdf,.png,.jpg,.jpeg" required>
         <p class="mt-1 text-xs text-slate-500">{{ __('Optional. Up to 5 files (PDF, Word, images, ZIP). Max 10MB each.') }}</p>
     </div>
     <div class="mt-5 flex gap-3">

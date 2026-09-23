@@ -12,6 +12,7 @@ use App\Services\CustomerService;
 use App\Services\InvoiceService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class InvoiceCustomerShowTest extends TestCase
@@ -45,6 +46,7 @@ class InvoiceCustomerShowTest extends TestCase
                 'payment_date' => now()->toDateString(),
                 'amount' => 200,
                 'reference_no' => 'SHOW-1',
+                'attachments' => [UploadedFile::fake()->image('receipt.jpg')],
             ])
             ->assertRedirect(route('admin.payments.index'));
 
@@ -71,6 +73,7 @@ class InvoiceCustomerShowTest extends TestCase
                 'payment_method' => PaymentMethod::Cash->value,
                 'payment_date' => now()->toDateString(),
                 'amount' => 50,
+                'attachments' => [UploadedFile::fake()->image('receipt.jpg')],
             ])
             ->assertRedirect(route('admin.payments.index'));
 

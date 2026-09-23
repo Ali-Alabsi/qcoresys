@@ -19,6 +19,7 @@ use App\Models\Attachment;
 use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\CustomerRequest;
+use App\Models\Department;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Faq;
@@ -27,6 +28,7 @@ use App\Models\JournalEntry;
 use App\Models\Payment;
 use App\Models\PortfolioProject;
 use App\Models\Quotation;
+use App\Models\Role;
 use App\Models\Service;
 use App\Models\ServiceBenefit;
 use App\Models\ServiceCategory;
@@ -34,7 +36,9 @@ use App\Models\ServiceFeature;
 use App\Models\ServiceProcessStep;
 use App\Models\Setting;
 use App\Models\Technology;
+use App\Models\User;
 use App\Services\AccountBalanceService;
+use App\Services\AttachmentService;
 use App\Services\ChartOfAccountsService;
 use App\Services\CustomerRequestService;
 use App\Services\CustomerService;
@@ -47,11 +51,11 @@ use App\Services\Public\CompanySettingsService;
 use App\Services\Public\PublicCatalogService;
 use App\Services\QuotationService;
 use App\Services\ReportingService;
+use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -313,12 +317,19 @@ class PlatformController extends Controller
         return back()->with('status', __('Invoice approved.'));
     }
 
-    public function invoicePost(Request $request, Invoice $invoice, InvoiceService $service): RedirectResponse
+    public function invoicePost(Request $request, Invoice $invoice, InvoiceService $service, AttachmentService $attachments): RedirectResponse
     {
+        $request->validate(AttachmentService::journalVoucherRules());
+
         try {
-            $service->post($invoice, $request->user()->id);
+            $invoice = $service->post($invoice, $request->user()->id);
         } catch (DomainException $e) {
             return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
+        $journal = $invoice->journalEntry ?? JournalEntry::query()->find($invoice->journal_entry_id);
+        if ($journal) {
+            $attachments->storeJournalVouchers($journal, $request->file('attachments', []), $request->user()->id);
         }
 
         return back()->with('status', __('Invoice posted.'));
@@ -358,7 +369,7 @@ class PlatformController extends Controller
         return redirect()->route('admin.payments.index', ['new' => 1]);
     }
 
-    public function paymentsStore(Request $request, PaymentService $service): RedirectResponse
+    public function paymentsStore(Request $request, PaymentService $service, AttachmentService $attachments): RedirectResponse
     {
         try {
             $data = $request->validate([
@@ -378,6 +389,7 @@ class PlatformController extends Controller
                 'payment_date' => ['required', 'date'],
                 'amount' => ['required', 'numeric', 'gt:0'],
                 'reference_no' => ['nullable', 'string'],
+                ...AttachmentService::journalVoucherRules(),
             ], [
                 'account_id.exists' => __('Deposit account must be a cash or bank account.'),
             ]);
@@ -401,15 +413,23 @@ class PlatformController extends Controller
         }
 
         $currency = Currency::where('code', 'USD')->firstOrFail();
+        $files = $request->file('attachments', []);
+        unset($data['attachments']);
 
         try {
-            $payment = DB::transaction(function () use ($data, $currency, $request, $service) {
+            $payment = DB::transaction(function () use ($data, $currency, $request, $service, $attachments, $files) {
                 $payment = $service->create([
                     ...$data,
                     'currency_id' => $currency->id,
                 ], $request->user()->id);
 
-                return $service->post($payment, $request->user()->id);
+                $payment = $service->post($payment, $request->user()->id);
+                $journal = $payment->journalEntry ?? JournalEntry::query()->find($payment->journal_entry_id);
+                if ($journal) {
+                    $attachments->storeJournalVouchers($journal, $files, $request->user()->id);
+                }
+
+                return $payment;
             });
         } catch (DomainException $e) {
             return redirect()
@@ -421,12 +441,19 @@ class PlatformController extends Controller
         return redirect()->route('admin.payments.index')->with('status', __('Payment posted: :number', ['number' => $payment->payment_no]));
     }
 
-    public function paymentPost(Request $request, Payment $payment, PaymentService $service): RedirectResponse
+    public function paymentPost(Request $request, Payment $payment, PaymentService $service, AttachmentService $attachments): RedirectResponse
     {
+        $request->validate(AttachmentService::journalVoucherRules());
+
         try {
-            $service->post($payment, $request->user()->id);
+            $payment = $service->post($payment, $request->user()->id);
         } catch (DomainException $e) {
             return back()->withErrors(['payment' => $e->getMessage()]);
+        }
+
+        $journal = $payment->journalEntry ?? JournalEntry::query()->find($payment->journal_entry_id);
+        if ($journal) {
+            $attachments->storeJournalVouchers($journal, $request->file('attachments', []), $request->user()->id);
         }
 
         return back()->with('status', __('Payment posted.'));
@@ -732,9 +759,21 @@ class PlatformController extends Controller
         return back()->with('status', __('Expense approved.'));
     }
 
-    public function expensePost(Request $request, Expense $expense, ExpenseService $service): RedirectResponse
+    public function expensePost(Request $request, Expense $expense, ExpenseService $service, AttachmentService $attachments): RedirectResponse
     {
-        $service->post($expense, $request->user()->id);
+        $request->validate(AttachmentService::journalVoucherRules());
+
+        try {
+            $expense = $service->post($expense, $request->user()->id);
+        } catch (DomainException $e) {
+            return back()->withErrors(['expense' => $e->getMessage()]);
+        }
+
+        $journal = $expense->journalEntry ?? JournalEntry::query()->find($expense->journal_entry_id);
+        if ($journal) {
+            $attachments->storeJournalVouchers($journal, $request->file('attachments', []), $request->user()->id);
+        }
+
         return back()->with('status', __('Expense posted.'));
     }
 
@@ -779,7 +818,8 @@ class PlatformController extends Controller
     public function journalsStore(
         Request $request,
         JournalEntryService $service,
-        AccountBalanceService $balances
+        AccountBalanceService $balances,
+        AttachmentService $attachments
     ): JsonResponse|RedirectResponse {
         $wantsJson = $request->expectsJson() || $request->ajax();
 
@@ -792,6 +832,7 @@ class PlatformController extends Controller
             'lines.*.debit' => ['nullable', 'numeric', 'min:0'],
             'lines.*.credit' => ['nullable', 'numeric', 'min:0'],
             'lines.*.description' => ['nullable', 'string'],
+            ...AttachmentService::journalVoucherRules(),
         ]);
 
         $base = Currency::query()->base()->firstOrFail();
@@ -862,6 +903,7 @@ class PlatformController extends Controller
                 'exchange_rate' => 1,
             ], $lines, $request->user()->id);
             $entry = $service->post($entry, $request->user()->id);
+            $attachments->storeJournalVouchers($entry, $request->file('attachments', []), $request->user()->id);
         } catch (DomainException $e) {
             if ($wantsJson) {
                 return response()->json(['message' => $e->getMessage()], 422);
@@ -897,7 +939,7 @@ class PlatformController extends Controller
 
     public function journalsShow(JournalEntry $journal): View
     {
-        $journal->load(['lines.account', 'lines.currency', 'attachments']);
+        $journal->load(['lines.account', 'lines.currency', 'attachments', 'reversedEntry', 'reversingEntries']);
 
         return view('admin.journals.show', compact('journal'));
     }
@@ -915,6 +957,26 @@ class PlatformController extends Controller
         return Storage::disk($disk)->download($attachment->file_path, $attachment->original_name);
     }
 
+    public function journalAttachmentView(JournalEntry $journal, Attachment $attachment): StreamedResponse
+    {
+        abort_unless(
+            $attachment->attachable_type === 'journal_entry' && (int) $attachment->attachable_id === (int) $journal->id,
+            404
+        );
+
+        $disk = $attachment->disk ?: 'local';
+        abort_unless(Storage::disk($disk)->exists($attachment->file_path), 404);
+
+        return Storage::disk($disk)->response(
+            $attachment->file_path,
+            $attachment->original_name,
+            [
+                'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="'.$attachment->original_name.'"',
+            ]
+        );
+    }
+
     public function journalPost(Request $request, JournalEntry $journal, JournalEntryService $service): RedirectResponse
     {
         try {
@@ -926,33 +988,17 @@ class PlatformController extends Controller
         return back()->with('status', __('Journal posted.'));
     }
 
-    /**
-     * @param  array<int, UploadedFile|null>  $files
-     */
-    private function storeJournalAttachments(JournalEntry $entry, array $files, ?int $uploadedBy = null): void
+    public function journalReverse(Request $request, JournalEntry $journal, JournalEntryService $service): RedirectResponse
     {
-        foreach ($files as $file) {
-            if (! $file instanceof UploadedFile) {
-                continue;
-            }
-
-            $disk = 'local';
-            $directory = 'journals/'.$entry->id;
-            $storedName = Str::uuid()->toString().'.'.$file->getClientOriginalExtension();
-            $path = $file->storeAs($directory, $storedName, $disk);
-
-            $entry->attachments()->create([
-                'file_name' => $storedName,
-                'original_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'disk' => $disk,
-                'mime_type' => $file->getMimeType(),
-                'extension' => $file->getClientOriginalExtension(),
-                'file_size' => $file->getSize(),
-                'description' => 'Journal entry attachment',
-                'uploaded_by' => $uploadedBy,
-            ]);
+        try {
+            $reversing = $service->reverse($journal, $request->user()->id);
+        } catch (DomainException $e) {
+            return back()->withErrors(['journal' => $e->getMessage()]);
         }
+
+        return redirect()
+            ->route('admin.journals.show', $reversing)
+            ->with('status', __('Journal reversed.'));
     }
 
     public function servicesIndex(Request $request): View
@@ -1143,6 +1189,99 @@ class PlatformController extends Controller
         $data = $this->validatePortfolio($request);
         $portfolioProject->update([...$data, 'slug' => Str::slug($data['title']), 'is_active' => $request->boolean('is_active'), 'is_featured' => $request->boolean('is_featured')]);
         return back()->with('status', __('Portfolio project updated.'));
+    }
+
+    public function usersIndex(Request $request): View
+    {
+        $users = User::query()
+            ->with(['roles', 'department'])
+            ->latest()
+            ->paginate($this->perPage($request))
+            ->withQueryString();
+
+        $editingUser = null;
+        $editId = $request->integer('edit');
+        if ($editId > 0) {
+            $editingUser = User::query()->with('roles')->find($editId);
+        }
+
+        return view('admin.users.index', [
+            'users' => $users,
+            'roles' => Role::query()->active()->orderBy('name')->pluck('name', 'id'),
+            'departments' => Department::query()->active()->orderBy('name')->pluck('name', 'id'),
+            'editingUser' => $editingUser,
+        ]);
+    }
+
+    public function usersCreate(): RedirectResponse
+    {
+        return redirect()->route('admin.users.index', ['new' => 1]);
+    }
+
+    public function usersStore(Request $request, UserService $service): RedirectResponse
+    {
+        try {
+            $data = $this->validateUser($request);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e->redirectTo(route('admin.users.index', ['new' => 1]));
+        }
+
+        $user = $service->create($data, $request->user()->id);
+
+        return redirect()->route('admin.users.index')->with('status', __('User created.'));
+    }
+
+    public function usersShow(User $user): View
+    {
+        $user->load(['roles.permissions', 'department']);
+
+        $role = $user->roles->first();
+        $permissions = $role
+            ? $role->permissions->sortBy('code')->values()
+            : collect();
+
+        return view('admin.users.show', [
+            'title' => $user->full_name,
+            'user' => $user,
+            'role' => $role,
+            'permissions' => $permissions,
+        ]);
+    }
+
+    public function usersEdit(User $user): RedirectResponse
+    {
+        return redirect()->route('admin.users.index', ['edit' => $user->id]);
+    }
+
+    public function usersUpdate(Request $request, User $user, UserService $service): RedirectResponse
+    {
+        try {
+            $data = $this->validateUser($request, $user);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e->redirectTo(route('admin.users.index', ['edit' => $user->id]));
+        }
+
+        try {
+            $service->update($user, $data, $request->user()->id);
+        } catch (DomainException $e) {
+            return redirect()
+                ->route('admin.users.index', ['edit' => $user->id])
+                ->withInput()
+                ->withErrors(['role_id' => $e->getMessage()]);
+        }
+
+        return redirect()->route('admin.users.index')->with('status', __('User updated.'));
+    }
+
+    public function usersDestroy(Request $request, User $user, UserService $service): RedirectResponse
+    {
+        try {
+            $service->delete($user, $request->user()->id);
+        } catch (DomainException $e) {
+            return back()->withErrors(['user' => $e->getMessage()]);
+        }
+
+        return redirect()->route('admin.users.index')->with('status', __('User deleted.'));
     }
 
     public function settingsEdit(): View
@@ -1374,6 +1513,27 @@ class PlatformController extends Controller
             'currency_id' => $this->selectField(__('Currency'), Currency::pluck('code', 'id')),
             'notes' => ['label' => __('Notes'), 'type' => 'textarea'],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateUser(Request $request, ?User $user = null): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'username' => ['required', 'string', 'max:100', Rule::unique('users', 'username')->ignore($user?->id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user?->id)],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'role_id' => ['required', Rule::exists('roles', 'id')->where('is_active', true)],
+            'password' => [$user ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $data['is_active'] = $request->boolean('is_active');
+
+        return $data;
     }
 
     private function portfolioFields(): array

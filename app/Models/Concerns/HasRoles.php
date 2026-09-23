@@ -56,6 +56,38 @@ trait HasRoles
         $this->forgetAuthorizationCache();
     }
 
+    /**
+     * Replace all roles for the user.
+     *
+     * @param  Role|string|int|list<Role|string|int>  $roles
+     */
+    public function syncRoles(Role|string|int|array $roles, ?int $assignedBy = null): void
+    {
+        $roles = is_array($roles) ? $roles : [$roles];
+        $syncData = [];
+
+        foreach ($roles as $role) {
+            $roleId = match (true) {
+                $role instanceof Role => $role->id,
+                is_int($role) => $role,
+                is_numeric($role) => (int) $role,
+                default => Role::query()->where('code', $role)->value('id'),
+            };
+
+            if (! $roleId) {
+                continue;
+            }
+
+            $syncData[$roleId] = [
+                'assigned_at' => now(),
+                'assigned_by' => $assignedBy,
+            ];
+        }
+
+        $this->roles()->sync($syncData);
+        $this->forgetAuthorizationCache();
+    }
+
     public function forgetAuthorizationCache(): void
     {
         $this->authorizationCache = null;

@@ -132,8 +132,9 @@
           <td class="whitespace-nowrap px-4 py-3">
             <div class="flex flex-row flex-nowrap items-center justify-end gap-3">
               @if($canPostRecord)
-                <form class="inline" method="POST" action="{{ route('admin.payments.post', $payment) }}">
+                <form class="inline-flex flex-col items-end gap-1" method="POST" action="{{ route('admin.payments.post', $payment) }}" enctype="multipart/form-data">
                   @csrf
+                  <input type="file" name="attachments[]" accept=".pdf,.png,.jpg,.jpeg" multiple required class="max-w-[10rem] text-[10px]" title="{{ __('Supporting documents') }}">
                   <button type="submit" class="font-semibold text-brand-navy">{{ __('Post') }}</button>
                 </form>
               @endif
@@ -159,7 +160,7 @@
       <h2 id="paymentModalTitle" class="text-sm font-bold text-brand-navy">{{ __('New payment') }}</h2>
       <button type="button" id="btnClosePayment" class="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100" aria-label="{{ __('Cancel') }}">✕</button>
     </div>
-    <form id="paymentForm" method="POST" action="{{ route('admin.payments.store') }}">
+    <form id="paymentForm" method="POST" action="{{ route('admin.payments.store') }}" enctype="multipart/form-data">
       @csrf
       <div class="field">
         <label for="invoice_id">{{ __('Invoice') }}</label>
@@ -215,6 +216,13 @@
           <input class="input-public !px-2 !py-1.5 text-sm" type="text" id="reference_no" name="reference_no" value="{{ old('reference_no') }}">
           @error('reference_no')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
+      </div>
+      <div class="field">
+        <label for="payment_attachments">{{ __('Supporting documents') }} <span class="text-red-600">*</span></label>
+        <input id="payment_attachments" class="input-public !px-2 !py-1.5 text-sm" type="file" name="attachments[]" accept=".pdf,.png,.jpg,.jpeg" multiple required>
+        <p class="mt-1 text-[10px] text-slate-500">{{ __('PDF or image, up to 5 files, 5MB each.') }}</p>
+        @error('attachments')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        @error('attachments.0')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
       </div>
       <div class="mt-1 flex gap-2">
         <button type="submit" class="btn-primary flex-1 !py-2 text-sm">{{ __('Save and post') }}</button>
