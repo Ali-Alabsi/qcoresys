@@ -21,28 +21,28 @@ class AdminPlatformTest extends TestCase
 
     public function test_staff_can_login_to_admin(): void
     {
-        $response = $this->post('/admin/login', [
+        $response = $this->post('/qcs/admin/login', [
             'email' => 'admin@qcoresys.com',
             'password' => 'password',
         ]);
 
         $response->assertRedirect(route('admin.dashboard'));
         $this->assertAuthenticated();
-        $this->get('/admin')->assertOk()->assertSee('QCoreSys');
+        $this->get('/qcs/admin')->assertOk()->assertSee('QCoreSys');
     }
 
     public function test_sales_manager_is_forbidden_from_settings(): void
     {
         $user = User::where('email', 'sales.manager@qcoresys.com')->firstOrFail();
 
-        $this->actingAs($user)->get('/admin/settings')->assertForbidden();
+        $this->actingAs($user)->get('/qcs/admin/settings')->assertForbidden();
     }
 
     public function test_account_manager_cannot_update_settings(): void
     {
         $user = User::where('email', 'account.manager@qcoresys.com')->firstOrFail();
 
-        $this->actingAs($user)->put('/admin/settings', ['settings' => []])->assertForbidden();
+        $this->actingAs($user)->put('/qcs/admin/settings', ['settings' => []])->assertForbidden();
     }
 
     public function test_portal_user_can_register_and_create_request(): void

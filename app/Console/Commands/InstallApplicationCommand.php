@@ -29,7 +29,7 @@ class InstallApplicationCommand extends Command
         $this->info('Application is ready.');
         $this->line('Admin login:  '.$setup->adminEmail());
         $this->line('Admin password: '.$setup->adminPassword());
-        $this->line('URL: '.url('/admin/login'));
+        $this->line('URL: '.url('/qcs/admin/login'));
 
         return self::SUCCESS;
     }

@@ -87,7 +87,7 @@ class RoleNavigationTest extends TestCase
         $home = AdminNavigation::homeRoute($accountant);
         $this->assertSame('admin.dashboard', $home);
 
-        $this->post('/admin/login', [
+        $this->post('/qcs/admin/login', [
             'email' => 'login.accountant@example.test',
             'password' => 'password123',
         ])->assertRedirect(route($home));

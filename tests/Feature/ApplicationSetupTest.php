@@ -44,7 +44,7 @@ class ApplicationSetupTest extends TestCase
         );
         $this->assertTrue(app(ApplicationSetupService::class)->isSetupReady());
 
-        $this->post('/admin/login', [
+        $this->post('/qcs/admin/login', [
             'email' => 'admin@qcoresys.com',
             'password' => 'password',
         ])->assertRedirect(route('admin.dashboard'));
@@ -68,7 +68,7 @@ class ApplicationSetupTest extends TestCase
 
         $this->artisan('qcoresys:install')->assertSuccessful();
 
-        $this->post('/admin/login', [
+        $this->post('/qcs/admin/login', [
             'email' => 'admin@qcoresys.com',
             'password' => 'changed-password',
         ])->assertRedirect(route('admin.dashboard'));

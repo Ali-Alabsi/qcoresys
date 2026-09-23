@@ -6,7 +6,7 @@ use App\Http\Controllers\Web\Admin\PlatformController;
 use App\Http\Controllers\Web\Admin\SetupController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('web')->prefix('admin')->name('admin.')->group(function () {
+Route::middleware('web')->prefix('qcs/admin')->name('admin.')->group(function () {
     Route::middleware('guest')->group(function () {
         Route::get('login', [AuthController::class, 'showLogin'])->name('login');
         Route::post('login', [AuthController::class, 'login'])->name('login.store');
